@@ -1,6 +1,6 @@
 # Arquitectura propuesta
 
-**Estado:** arquitectura base aprobada en Etapa 0; etapas 1–10 aprobadas y Etapa 11 implementada, pendiente de aprobación. Persistencia de proyecto y exportación siguen pendientes de sus etapas.
+**Estado:** arquitectura base aprobada en Etapa 0; Etapas 1–11 aprobadas y Etapa 12 implementada, pendiente de aprobación. Exportación sigue pendiente.
 
 ## Alcance técnico
 
@@ -8,7 +8,7 @@
 - Navegadores de producto: Chrome y Edge de escritorio, últimas dos versiones estables. El navegador integrado medido en el spike es Electron/Chromium y no sustituye la validación en esos productos.
 - PDF.js 6.5.438 para lectura, metadatos y renderizado; pdf-lib solo para generar o modificar exportaciones cuyo presupuesto de memoria sea seguro.
 - El Worker local de PDF.js atiende la lectura PDF; `PageRenderQueue` serializa los trabajos que usan canvas, prioriza la página visible, luego el análisis y finalmente las miniaturas, y propaga cancelación. La Etapa 8 clasifica muestras de píxeles en un Worker local y no carga OpenCV.
-- IndexedDB conserva el estado pequeño del proyecto y, cuando el navegador lo permita, handles de archivos. Los bytes originales no se guardan automáticamente en IndexedDB.
+- IndexedDB conserva un proyecto local activo, sus metadatos y el historial delta. Los objetos `File`, bytes PDF, contraseñas y handles no se serializan. Tras recargar, el usuario vuelve a seleccionar las fuentes y se verifican por nombre, tamaño, huella PDF y número de páginas.
 
 ## Límites establecidos por los spikes
 
@@ -16,7 +16,7 @@
 2. **pdf-lib:** no es una solución de streaming. La copia y el guardado mantienen un buffer de salida completo. En el fixture de 500 MiB se midieron 1,050.8 MiB RSS en el punto de guardado. Se propone un presupuesto inicial conservador de `300 MiB + 3 × tamaño mayor entre entrada y salida estimada`; es una cota heurística, no una garantía. Con el límite de pestaña propuesto de 1.5 GiB, una exportación individual de más de aproximadamente 400 MiB deberá advertir y ofrecer exportación por partes. La estrategia exacta queda pendiente de aprobación y validación en Chrome/Edge.
 3. **OpenCV.js:** no se propone como dependencia inicial. En el spike, el archivo pesó 13.3 MB (3.76 MB gzip), tardó 338 ms en inicializarse en Worker y fue más lento que un bucle sencillo sobre `ImageData` para umbralizar y contar 4.19 MP. Se comienza con operaciones locales de píxeles; reconsiderar OpenCV si una operación concreta demuestra una mejora medida.
 4. **Tesseract OSD:** candidato opcional, de carga diferida y totalmente local. En cuatro imágenes sintéticas corrigió las cuatro orientaciones, pero tardó 367–936 ms por página y requiere un núcleo legacy y datos OSD. No habilitar correcciones automáticas basándose solo en ese conjunto.
-5. **Almacenamiento:** preferir un handle de File System Access API persistido en IndexedDB, sujeto a permiso renovado. Si el usuario importa mediante `<input type=file>`, el `File` es válido durante la sesión y al volver a abrir el proyecto se solicita re-seleccionarlo si ya no está disponible. OPFS será una copia opcional solo con consentimiento y espacio suficiente; no duplicar archivos silenciosamente.
+5. **Almacenamiento:** guardar automáticamente el estado y el historial delta del proyecto en IndexedDB, con guardado inmediato opcional, versión de esquema y migración. No persistir los PDFs ni handles; después de recargar se solicitan de nuevo las fuentes y se valida su huella antes de reabrirlas. OPFS y handles persistentes quedan fuera de esta etapa.
 
 Los detalles y las limitaciones de los experimentos están en [el informe](./docs/stage0-spike-report.md) y en los [ADRs](./docs/adr/).
 
@@ -37,7 +37,7 @@ src/
     projects/          guardado, recuperación y migraciones
   i18n/                catálogo español; sin textos de UI incrustados
   pdf/                 adaptadores PDF.js/pdf-lib, cola de render y geometría
-  storage/             IndexedDB, handles y referencias a archivos
+  storage/             persistencia IndexedDB y referencias de proyecto
   workers/             análisis visual futuro y mensajes tipados
   store/               estado normalizado y comandos con deltas
   types/               contratos del dominio y mensajes Worker
@@ -55,7 +55,7 @@ La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniat
 
 - **Documento:** ID estable, nombre tratado como texto no confiable, tamaño, fecha de modificación, cantidad de páginas, metadatos filtrados, indicadores de cifrado/firmas/formularios y referencia reabrible a la fuente.
 - **Página:** ID estable propio, documento y número de origen, rotación nativa, rotación solicitada por el usuario, CropBox modificada en coordenadas PDF (nula significa conservar la caja visible original), UserUnit, dimensiones, tipo de contenido, análisis con confianza, estado de eliminación y estado de modificación. Los márgenes se editan en milímetros y se convierten usando UserUnit y rotación cardinal. La caja solo puede reducir el área visible que PDF.js expone; no se amplía sobre la caja original ni se modifica el contenido/fuente. El modelo conserva los deltas de rotación y CropBox como comandos reversibles; en duplicados se hereda el recorte. `documentId` y `sourcePageNumber` mantienen la procedencia; el `pageOrder` global permite intercalar páginas para la composición sin reasignar ni copiar la fuente.
-- **Proyecto:** ID estable, documentos y páginas normalizados por ID, orden de documentos y orden global de páginas. La selección temporal permanece fuera del historial. Los documentos conservan una referencia al `File`; los comandos no copian sus bytes.
+- **Proyecto:** ID estable, documentos y páginas normalizados por ID, orden de documentos y orden global de páginas. La selección temporal permanece fuera del historial. En memoria, los documentos conservan una referencia al `File`; el formato persistido omite el archivo y sus bytes.
 - **Comando:** delta reversible `forward`/`inverse`; importar un documento añade sus registros y páginas en una entrada de historial. Undo/redo mueve el comando entre pilas y una nueva acción descarta la rama de redo.
 
 ## Flujo de datos
@@ -68,16 +68,17 @@ La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniat
 6. Editar márgenes físicos desde la caja visible original de PDF.js, ya sea con campos numéricos o arrastrando guías gráficas accesibles por teclado. Convertirlos a una CropBox en espacio de usuario PDF considerando UserUnit y rotación efectiva; previsualizar durante el gesto y guardar un único delta reversible al soltar. Restaurar márgenes cero vuelve a la caja fuente; el editor no altera MediaBox ni borra/rasteriza objetos. Exportar/materializar la CropBox se reserva para la Etapa 13.
 7. Registrar cada importación y operación de página como una orden reversible del proyecto. Ctrl/Cmd+Z deshace, Ctrl/Cmd+Shift+Z o Ctrl/Cmd+Y rehace; los campos editables conservan sus atajos nativos. Las rotaciones de una o varias páginas, cada CropBox y los cambios de orden global se registran como comandos delta. Una página puede moverse entre fuentes de la secuencia combinada sin perder su referencia al PDF original.
 8. Estimar memoria antes de exportar. Crear el PDF completo en memoria con pdf-lib solo dentro del presupuesto; validar el buffer reabriéndolo con PDF.js y contar páginas antes de escribirlo a destino. Usar escritura temporal/atómica si la API disponible la admite. Si el presupuesto no alcanza, ofrecer archivos de salida por rangos o rechazar la exportación individual con un mensaje claro.
+9. Serializar Maps y comandos delta como registros versionados sin `File`. Autoguardar tras 500 ms de inactividad y ofrecer guardado inmediato. Al recuperar, validar el esquema y el orden del proyecto antes de hidratarlo; al volver a seleccionar fuentes, exigir coincidencia de nombre, tamaño, huella PDF y cantidad de páginas. Consultar `navigator.storage.estimate()`, avisar al acercarse a la cuota y mostrar explícitamente errores `QuotaExceededError`; la estimación no reserva espacio.
 
 ## Seguridad, privacidad y compatibilidad
 
 - CSP estricta servida también como cabecera HTTP: recursos solo del mismo origen, sin CDN, telemetría, `eval` o `object-src`; permitir únicamente los esquemas locales imprescindibles para PDF/Workers después de validarlos. La política de desarrollo permite scripts/estilos inline y Workers `blob:` solo para React Fast Refresh/HMR de Vite; preview y hosting de producción no permiten `unsafe-inline` ni `blob:` para Workers. Usar rutas locales de Worker.
 - La versión integrada de PDF.js no expone `isEvalSupported` en su API. Se usa sin el Viewer ni el gestor de scripting; la comprobación del bundle fijado no encontró llamadas a `eval()` ni `new Function()`. No se ejecutan acciones ni JavaScript del PDF.
-- La importación retiene el `File` durante la sesión, sin copiar el archivo a IndexedDB. El modelo/historial mantiene referencias al `File`, no copias de bytes. La etapa activa conserva su `PDFDocumentLoadingTask` para miniaturas y lo destruye al cambiar de documento o desmontar la aplicación. Las miniaturas se limitan a una caché de 64 MiB y el renderizado se cancela al salir de la ventana virtual; `page.cleanup()` se ejecuta después de finalizar cada tarea. La fuente se debe volver a seleccionar tras recargar; la persistencia de handles se implementará con el almacenamiento del proyecto.
+- La importación retiene el `File` durante la sesión, sin copiarlo a IndexedDB. El modelo/historial mantiene referencias al `File` solo en memoria; el serializador las omite también en comandos de undo/redo. La sesión PDF se destruye al cambiar de documento o desmontar la aplicación. La fuente se vuelve a seleccionar tras recargar y su huella/número de páginas se verifican antes de enlazarla. No se guardan contraseñas.
 - Escapar nombres, metadatos y mensajes procedentes de PDF. No insertar HTML proporcionado por documentos.
-- La File System Access API es específica de Chromium. Si no está disponible, pedir que se vuelva a seleccionar la fuente después de recargar. OPFS e IndexedDB están sujetos a cuota y evicción; consultar `navigator.storage.estimate()` y manejar errores explícitamente.
+- IndexedDB, OPFS y el almacenamiento del navegador están sujetos a cuota y evicción; consultar `navigator.storage.estimate()` y manejar errores explícitamente. La versión actual requiere volver a seleccionar los PDFs después de recargar; persistencia de handles y copia opcional a OPFS quedan para una decisión futura.
 - Las firmas digitales dejan de ser válidas tras modificar o combinar el PDF. Formularios, anotaciones, marcadores, capas, adjuntos, etiquetas y restricciones de permisos se evalúan y documentan antes de exportar; no prometer preservación no comprobada.
 
 ## Decisiones aún abiertas
 
-Hardware exacto de aceptación, límites definitivos de memoria, comportamiento para PDF con restricciones/permisos, persistencia opcional en OPFS y criterios de orientación automática. Ver [informe de Etapa 0](./docs/stage0-spike-report.md).
+Hardware exacto de aceptación, límites definitivos de memoria, comportamiento para PDF con restricciones/permisos, persistencia opcional de handles/OPFS y criterios de orientación automática. Ver [informe de Etapa 0](./docs/stage0-spike-report.md).

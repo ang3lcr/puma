@@ -7,7 +7,9 @@ import { isValidBox } from '../features/margins/geometry';
 import type { PdfBox } from '../features/margins/types';
 import type { OrientationAnalysis } from '../features/orientation/types';
 
-export type ProjectDocument = Omit<ImportedPdf, 'session'>;
+export type ProjectDocument = Omit<ImportedPdf, 'session' | 'file'> & {
+  readonly file: File | null;
+};
 
 export interface ProjectPage {
   readonly id: string;
@@ -90,6 +92,12 @@ export interface ProjectHistoryState {
 
 export type ProjectHistoryAction =
   | { type: 'import-document'; document: ProjectDocument }
+  | { type: 'restore-history'; history: ProjectHistoryState }
+  | {
+      type: 'attach-document-file';
+      documentId: string;
+      file: File;
+    }
   | { type: 'execute'; command: ProjectCommand }
   | {
       type: 'record-page-blank-analysis';
@@ -570,6 +578,28 @@ export function projectHistoryReducer(
       const command = createDocumentImportCommand(state.project, action.document);
       return executeCommand(state, command);
     }
+    case 'restore-history':
+      return action.history;
+    case 'attach-document-file': {
+      const document = state.project.documents.get(action.documentId);
+      if (!document) {
+        throw new Error(
+          `Document "${action.documentId}" is missing from the project.`,
+        );
+      }
+      const documents = new Map(state.project.documents);
+      documents.set(document.id, { ...document, file: action.file });
+      return {
+        ...state,
+        project: { ...state.project, documents },
+        undoStack: state.undoStack.map((command) =>
+          attachFileToCommand(command, document.id, action.file),
+        ),
+        redoStack: state.redoStack.map((command) =>
+          attachFileToCommand(command, document.id, action.file),
+        ),
+      };
+    }
     case 'execute':
       return executeCommand(state, action.command);
     case 'record-page-blank-analysis': {
@@ -627,6 +657,26 @@ export function projectHistoryReducer(
     default:
       return assertNever(action);
   }
+}
+
+function attachFileToCommand(
+  command: ProjectCommand,
+  documentId: string,
+  file: File,
+): ProjectCommand {
+  const attach = (operation: ProjectOperation): ProjectOperation =>
+    operation.type === 'insert-document' &&
+    operation.document.id === documentId
+      ? {
+          ...operation,
+          document: { ...operation.document, file },
+        }
+      : operation;
+  return {
+    ...command,
+    forward: command.forward.map(attach),
+    inverse: command.inverse.map(attach),
+  };
 }
 
 function executeCommand(

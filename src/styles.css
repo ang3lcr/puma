@@ -177,6 +177,27 @@ main:focus-visible {
   opacity: 0.45;
 }
 
+.save-project-button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.save-project-button:hover:not(:disabled) {
+  background: var(--accent-wash);
+}
+
+.save-project-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .local-indicator {
   gap: 8px;
   color: var(--text-muted);
@@ -328,6 +349,11 @@ main:focus-visible {
   background: var(--panel-raised);
 }
 
+.document-list-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 .document-list-name {
   max-width: 100%;
   overflow: hidden;
@@ -338,6 +364,11 @@ main:focus-visible {
 
 .document-list-pages {
   color: var(--text-subtle);
+  font-size: 10px;
+}
+
+.document-list-source {
+  color: var(--warning, #d39a56);
   font-size: 10px;
 }
 
@@ -823,6 +854,54 @@ main:focus-visible {
   font-size: 17px;
   font-weight: 620;
   letter-spacing: -0.02em;
+}
+
+.persistence-panel,
+.recovery-panel {
+  display: grid;
+  gap: 6px;
+  margin: -5px 0 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text-muted);
+  background: var(--panel);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.persistence-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 5px 12px;
+}
+
+.storage-usage,
+.persistence-hint {
+  color: var(--text-subtle);
+}
+
+.persistence-error {
+  margin: 0;
+  color: var(--danger, #e17a7a);
+}
+
+.persistence-warning {
+  margin: 0;
+  color: var(--warning, #d39a56);
+}
+
+.recovery-panel {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.recovery-panel p {
+  margin: 0;
+}
+
+.recovery-panel .secondary-button {
+  justify-self: start;
 }
 
 .document-state {
@@ -1617,6 +1696,11 @@ main:focus-visible {
 
   .workspace-header {
     align-items: flex-start;
+  }
+
+  .persistence-summary {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .document-state {

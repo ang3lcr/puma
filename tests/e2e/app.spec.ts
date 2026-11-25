@@ -57,6 +57,65 @@ test('initial workspace is usable and makes no external network requests', async
   expect(pageErrors).toEqual([]);
 });
 
+test('autosaves project edits, restores history, and relinks PDF sources', async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.goto('/');
+  await page.getByLabel('Seleccionar PDF').setInputFiles({
+    name: 'recovery.pdf',
+    mimeType: 'application/pdf',
+    buffer: createMinimalPdf(),
+  });
+  await expect(page.locator('.page-properties')).toContainText('0°');
+  await page.getByRole('button', { name: 'Guardar ahora' }).click();
+  await expect(page.locator('.persistence-panel')).toContainText(
+    'Último guardado:',
+  );
+  await page
+    .getByRole('button', { name: 'Girar página 90° a la derecha' })
+    .click();
+  await expect(page.locator('.page-properties')).toContainText('90°');
+  await expect(page.locator('.persistence-panel')).toContainText(
+    'Cambios pendientes de guardar',
+  );
+  await expect(page.locator('.persistence-panel')).toContainText(
+    'Último guardado:',
+  );
+
+  await page.reload();
+  await expect(page.locator('.document-list-item')).toHaveCount(1);
+  await expect(page.locator('.recovery-panel')).toContainText(
+    'faltan 1 archivos PDF de origen',
+  );
+  await expect(page.locator('.page-properties')).toHaveCount(0);
+
+  await page.getByLabel('Seleccionar archivos para recuperar').setInputFiles({
+    name: 'other.pdf',
+    mimeType: 'application/pdf',
+    buffer: createMinimalPdf(),
+  });
+  await expect(page.getByRole('alert')).toContainText(
+    'No se encontró una fuente pendiente',
+  );
+  await expect(page.locator('.recovery-panel')).toBeVisible();
+
+  await page.getByLabel('Seleccionar archivos para recuperar').setInputFiles({
+    name: 'recovery.pdf',
+    mimeType: 'application/pdf',
+    buffer: createMinimalPdf(),
+  });
+  await expect(page.locator('.page-properties')).toContainText('90°');
+  await expect(page.locator('.recovery-panel')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(page.locator('.page-properties')).toContainText('0°');
+  await page.getByRole('button', { name: 'Rehacer' }).click();
+  await expect(page.locator('.page-properties')).toContainText('90°');
+  expect(pageErrors).toEqual([]);
+});
+
 test('imports PDF metadata locally and reports invalid PDF files', async ({
   page,
   baseURL,

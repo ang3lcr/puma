@@ -1,5 +1,13 @@
 # Changelog
 
+## Etapa 12
+
+- Añadido guardado automático (500 ms tras cada cambio) y guardado inmediato del proyecto e historial de undo/redo en IndexedDB.
+- Añadidas serialización sin fuentes PDF ni bytes, validación de registros y migración de esquema v0 a v1; los esquemas desconocidos no sobrescriben el guardado existente.
+- Añadidos recuperación tras recarga y re-enlace explícito de los PDFs, validando nombre, tamaño, huella PDF y cantidad de páginas. No se guardan contraseñas ni handles.
+- Añadidos indicador de guardado, estimación de cuota, aviso al acercarse al límite y mensajes para errores de almacenamiento/cuota.
+- Validación: typecheck y lint correctos; 12 archivos de pruebas unitarias/componentes y 60 pruebas aprobadas; build correcto; 11 E2E aprobadas, incluida recarga, detección de fuente incorrecta y undo/redo recuperado.
+
 ## Etapa 11
 
 - Habilitado el reordenamiento global reversible de páginas entre documentos fuente para formar una secuencia combinada; la procedencia y el número de origen de cada página se conservan.

@@ -28,6 +28,13 @@ import { es } from './i18n/es';
 import { formatBytes, formatNumber } from './i18n/format';
 import { PageRenderQueue } from './pdf/page-render-queue';
 import {
+  estimateLocalStorage,
+  isStorageQuotaError,
+  loadSavedProject,
+  saveProjectHistory,
+  type StorageEstimate,
+} from './storage/project-persistence';
+import {
   createDeletePageCommand,
   createDuplicatePageCommand,
   createMovePageCommand,
@@ -39,6 +46,7 @@ import {
   createSetBlankReviewDecisionCommand,
   getOrderedProjectDocuments,
   getOrderedProjectPages,
+  type ProjectHistoryAction,
   projectHistoryReducer,
   type ProjectDocument,
 } from './store/project-store';
@@ -85,13 +93,32 @@ interface OrientationScanState {
   total: number;
 }
 
+type PersistenceStatus = 'loading' | 'pending' | 'saving' | 'saved' | 'error';
+
 function App() {
   const [theme, setTheme] = useState<Theme>('dark');
-  const [projectHistory, dispatchProject] = useReducer(
+  const [hydrationGate] = useState(() => {
+    let resolve!: () => void;
+    const promise = new Promise<void>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  });
+  const [projectHistory, dispatchProjectAction] = useReducer(
     projectHistoryReducer,
     undefined,
     createProjectHistoryState,
   );
+  const [hasHydrated, setHasHydrated] = useState(false);
+  const [persistenceEnabled, setPersistenceEnabled] = useState(false);
+  const [persistenceStatus, setPersistenceStatus] =
+    useState<PersistenceStatus>('loading');
+  const [persistenceError, setPersistenceError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [storageEstimate, setStorageEstimate] =
+    useState<StorageEstimate | null>(null);
+  const [storageEstimateFailed, setStorageEstimateFailed] = useState(false);
+  const [isRelinking, setIsRelinking] = useState(false);
   const documents = getOrderedProjectDocuments(projectHistory.project);
   const projectPages = getOrderedProjectPages(projectHistory.project);
   const activeProjectPages = projectPages.filter((page) => !page.isDeleted);
@@ -127,14 +154,29 @@ function App() {
   const [renderQueue] = useState(() => new PageRenderQueue());
   const renderQueueLifecycle = useRef({ active: false });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const relinkInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const passwordDialogRef = useRef<HTMLDivElement>(null);
   const fullReadDialogRef = useRef<HTMLDivElement>(null);
   const importRunning = useRef(false);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const saveRevision = useRef(0);
+  const persistenceAvailable = useRef(false);
+  const dispatchProject = useCallback((action: ProjectHistoryAction): void => {
+    dispatchProjectAction(action);
+    if (action.type !== 'restore-history' && persistenceAvailable.current) {
+      saveRevision.current += 1;
+      setPersistenceStatus('pending');
+      setPersistenceError(null);
+    }
+  }, []);
   const blankScanAbort = useRef<AbortController | null>(null);
   const orientationScanAbort = useRef<AbortController | null>(null);
   const isDark = theme === 'dark';
-  const isLoadingDocument = isImporting || isOpeningDocument;
+  const isLoadingDocument = isImporting || isOpeningDocument || isRelinking;
+  const documentsNeedingRelink = documents.filter(
+    (document) => document.file === null,
+  );
   const activeDocument = documents.find(
     (document) => document.id === activeDocumentId,
   );
@@ -185,6 +227,113 @@ function App() {
     },
     [],
   );
+
+  const saveProjectNow = useCallback(
+    async (history: typeof projectHistory): Promise<void> => {
+      if (!persistenceEnabled) {
+        return;
+      }
+
+      const revision = ++saveRevision.current;
+      setPersistenceStatus('saving');
+      setPersistenceError(null);
+      const queuedSave = saveQueue.current.then(() =>
+        saveProjectHistory(history),
+      );
+      saveQueue.current = queuedSave.then(
+        () => undefined,
+        () => undefined,
+      );
+
+      try {
+        const nextSavedAt = await queuedSave;
+        if (revision === saveRevision.current) {
+          setSavedAt(nextSavedAt);
+          setPersistenceStatus('saved');
+        }
+        try {
+          setStorageEstimate(await estimateLocalStorage());
+          setStorageEstimateFailed(false);
+        } catch (error) {
+          console.error('Unable to estimate local storage usage.', error);
+          setStorageEstimateFailed(true);
+        }
+      } catch (error) {
+        console.error('Unable to save the local project.', error);
+        if (revision === saveRevision.current) {
+          setPersistenceStatus('error');
+          setPersistenceError(
+            isStorageQuotaError(error)
+              ? es.persistence.quotaExceeded
+              : es.persistence.saveFailed,
+          );
+        }
+      }
+    },
+    [persistenceEnabled],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    async function restoreLocalProject(): Promise<void> {
+      try {
+        const savedProject = await loadSavedProject();
+        if (cancelled) {
+          return;
+        }
+        if (savedProject) {
+          dispatchProject({
+            type: 'restore-history',
+            history: savedProject.history,
+          });
+          setSavedAt(savedProject.savedAt);
+        }
+        persistenceAvailable.current = true;
+        setPersistenceEnabled(true);
+        setPersistenceStatus('saved');
+        try {
+          setStorageEstimate(await estimateLocalStorage());
+        } catch (error) {
+          console.error('Unable to estimate local storage usage.', error);
+          setStorageEstimateFailed(true);
+        }
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        console.error('Unable to recover the local project.', error);
+        persistenceAvailable.current = false;
+        setPersistenceStatus('error');
+        setPersistenceError(es.persistence.recoveryFailed);
+      } finally {
+        if (!cancelled) {
+          setHasHydrated(true);
+          hydrationGate.resolve();
+        }
+      }
+    }
+
+    void restoreLocalProject();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatchProject, hydrationGate]);
+
+  useEffect(() => {
+    if (
+      !hasHydrated ||
+      !persistenceEnabled ||
+      (projectHistory.project.documents.size === 0 &&
+        projectHistory.undoStack.length === 0 &&
+        projectHistory.redoStack.length === 0)
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void saveProjectNow(projectHistory);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [hasHydrated, persistenceEnabled, projectHistory, saveProjectNow]);
 
   const redoProjectChange = useCallback((): void => {
     if (isPageAnalysisRunning) {
@@ -678,11 +827,13 @@ function App() {
   }
 
   async function importFiles(files: File[]): Promise<void> {
-    if (
-      files.length === 0 ||
-      importRunning.current ||
-      isPageAnalysisRunning
-    ) {
+    if (files.length === 0) {
+      return;
+    }
+    if (!hasHydrated) {
+      await hydrationGate.promise;
+    }
+    if (importRunning.current || isPageAnalysisRunning) {
       return;
     }
 
@@ -739,6 +890,120 @@ function App() {
     setProgress(null);
   }
 
+  async function relinkFiles(files: File[]): Promise<void> {
+    if (
+      files.length === 0 ||
+      isLoadingDocument ||
+      isPageAnalysisRunning ||
+      documentsNeedingRelink.length === 0
+    ) {
+      return;
+    }
+
+    setIsRelinking(true);
+    setImportFailures([]);
+    let remainingDocuments = [...documentsNeedingRelink];
+    const failures: ImportFailure[] = [];
+
+    for (const file of files) {
+      const fileName = safeFileName(file.name);
+      const candidates = remainingDocuments.filter(
+        (document) =>
+          document.fileName === fileName &&
+          document.size === file.size &&
+          document.fingerprint !== null,
+      );
+      if (candidates.length === 0) {
+        failures.push({
+          fileName,
+          message: es.persistence.sourceNotFound,
+        });
+        continue;
+      }
+
+      setProgress({
+        fileName,
+        loaded: 0,
+        total: file.size,
+        percent: 0,
+      });
+
+      let session: PdfDocumentSession | null = null;
+      let retainedSession = false;
+      try {
+        const { openPdfDocument } = await import(
+          './features/documents/pdf-import'
+        );
+        session = await openPdfDocument(file, {
+          requestPassword: (reason) =>
+            requestDocumentPassword(fileName, reason),
+          confirmFullRead: (fileSize) =>
+            requestFullReadConfirmation(fileName, fileSize),
+          onProgress: (nextProgress) => {
+            setProgress({ fileName, ...nextProgress });
+          },
+        });
+
+        const fingerprint = session.document.fingerprints[0] ?? null;
+        const matches = candidates.filter(
+          (document) =>
+            document.fingerprint === fingerprint &&
+            document.pageCount === session?.document.numPages,
+        );
+        const activeDocument = matches[0];
+        if (!activeDocument) {
+          failures.push({
+            fileName,
+            message: es.persistence.sourceMismatch,
+          });
+          continue;
+        }
+
+        for (const document of matches) {
+          dispatchProject({
+            type: 'attach-document-file',
+            documentId: document.id,
+            file,
+          });
+        }
+        remainingDocuments = remainingDocuments.filter(
+          (document) => !matches.some((match) => match.id === document.id),
+        );
+        setActiveDocumentId(activeDocument.id);
+        const firstPage = getOrderedProjectPages(
+          projectHistory.project,
+        ).find(
+          (page) => page.documentId === activeDocument.id && !page.isDeleted,
+        );
+        setActivePageId(firstPage?.id ?? null);
+        setActivePageInfo(null);
+        setSelectedOrientationPageIds(new Set());
+        setActivePdfSession({
+          documentId: activeDocument.id,
+          session,
+        });
+        retainedSession = true;
+      } catch (error) {
+        failures.push({
+          fileName,
+          message: getImportFailureMessage(error),
+        });
+      } finally {
+        if (session && !retainedSession) {
+          try {
+            await session.loadingTask.destroy();
+          } catch (error) {
+            console.error('Unable to release a relinked PDF source.', error);
+          }
+        }
+      }
+    }
+
+    setImportFailures(failures);
+    setIsRelinking(false);
+    setProgress(null);
+  }
+
   async function selectDocument(document: ProjectDocument): Promise<void> {
     if (
       isLoadingDocument ||
@@ -746,6 +1011,15 @@ function App() {
       importRunning.current ||
       activePdfSession?.documentId === document.id
     ) {
+      return;
+    }
+    if (!document.file) {
+      setImportFailures([
+        {
+          fileName: document.fileName,
+          message: es.persistence.sourceNotFound,
+        },
+      ]);
       return;
     }
 
@@ -800,6 +1074,15 @@ function App() {
     const files = Array.from(input.files ?? []);
     input.value = '';
     void importFiles(files);
+  }
+
+  function handleRelinkInputChange(
+    event: FormEvent<HTMLInputElement>,
+  ): void {
+    const input = event.currentTarget;
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    void relinkFiles(files);
   }
 
   function handleDrop(event: DragEvent<HTMLElement>): void {
@@ -999,6 +1282,18 @@ function App() {
               <span>{es.history.redo}</span>
             </button>
           </div>
+          <button
+            className="save-project-button"
+            type="button"
+            disabled={
+              !persistenceEnabled ||
+              persistenceStatus === 'loading' ||
+              persistenceStatus === 'saving'
+            }
+            onClick={() => void saveProjectNow(projectHistory)}
+          >
+            {es.persistence.saveNow}
+          </button>
           <span className="local-indicator">
             <span className="status-dot" aria-hidden="true" />
             {es.header.localProcessing}
@@ -1051,12 +1346,21 @@ function App() {
                       className="document-list-item"
                       type="button"
                       aria-pressed={document.id === activeDocumentId}
-                      disabled={isLoadingDocument || isPageAnalysisRunning}
+                      disabled={
+                        isLoadingDocument ||
+                        isPageAnalysisRunning ||
+                        document.file === null
+                      }
                       onClick={() => void selectDocument(document)}
                     >
                       <span className="document-list-name">
                         {document.fileName}
                       </span>
+                      {document.file === null && (
+                        <span className="document-list-source">
+                          {es.persistence.sourcePending}
+                        </span>
+                      )}
                       <span className="document-list-pages">
                         {formatNumber(document.pageCount)}{' '}
                         {es.documents.pageCountLabel}
@@ -1274,6 +1578,16 @@ function App() {
             disabled={isLoadingDocument || isPageAnalysisRunning}
             onChange={handleFileInputChange}
           />
+          <input
+            ref={relinkInputRef}
+            className="visually-hidden"
+            type="file"
+            accept="application/pdf,.pdf"
+            multiple
+            aria-label={es.persistence.relinkButton}
+            disabled={isLoadingDocument || isPageAnalysisRunning}
+            onChange={handleRelinkInputChange}
+          />
           <div className="workspace-header">
             <div>
               <p className="eyebrow">{es.workspace.eyebrow}</p>
@@ -1288,6 +1602,86 @@ function App() {
                   : es.workspace.pending}
             </span>
           </div>
+
+          <section
+            className="persistence-panel"
+            aria-label={es.persistence.region}
+            aria-live="polite"
+          >
+            <div className="persistence-summary">
+              <span>
+                {persistenceStatus === 'loading'
+                  ? es.persistence.loading
+                  : persistenceStatus === 'pending'
+                    ? es.persistence.pending
+                    : persistenceStatus === 'saving'
+                      ? es.persistence.saving
+                      : persistenceStatus === 'error'
+                        ? es.persistence.errorSummary
+                        : savedAt
+                          ? es.persistence.savedAt.replace(
+                              '{time}',
+                              new Date(savedAt).toLocaleTimeString('es-MX', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              }),
+                            )
+                          : es.persistence.notSaved}
+              </span>
+              {storageEstimate && (
+                <span className="storage-usage">
+                  {formatBytes(storageEstimate.usage)} /{' '}
+                  {formatBytes(storageEstimate.quota)}
+                </span>
+              )}
+            </div>
+            {persistenceStatus === 'error' && persistenceError && (
+              <p className="persistence-error" role="alert">
+                {persistenceError}
+              </p>
+            )}
+            {storageEstimate &&
+              storageEstimate.usage / storageEstimate.quota >= 0.9 && (
+                <p className="persistence-warning">
+                  {es.persistence.quotaWarning
+                    .replace('{usage}', formatBytes(storageEstimate.usage))
+                    .replace('{quota}', formatBytes(storageEstimate.quota))}
+                </p>
+              )}
+            {storageEstimateFailed && (
+              <p className="persistence-warning">
+                {es.persistence.quotaEstimateFailed}
+              </p>
+            )}
+            {!storageEstimate && !storageEstimateFailed && hasHydrated && (
+              <p className="persistence-hint">
+                {es.persistence.quotaUnavailable}
+              </p>
+            )}
+          </section>
+
+          {documentsNeedingRelink.length > 0 && (
+            <section
+              className="recovery-panel"
+              aria-label={es.persistence.recoveryRegion}
+            >
+              <p>
+                {es.persistence.missingSources.replace(
+                  '{count}',
+                  formatNumber(documentsNeedingRelink.length),
+                )}
+              </p>
+              <p>{es.persistence.relinkDescription}</p>
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={isLoadingDocument || isPageAnalysisRunning}
+                onClick={() => relinkInputRef.current?.click()}
+              >
+                {es.persistence.relinkButton}
+              </button>
+            </section>
+          )}
 
           {isLoadingDocument && progress && (
             <div className="import-progress workspace-progress" aria-live="polite">

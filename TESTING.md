@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–11 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–12 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
 
 ## Entorno de referencia
 
@@ -184,3 +184,14 @@ El fixture E2E usa un PDF con CropBox no nativa, origen no nulo y UserUnit 2; va
 | `npm run test:e2e` | Build correcto; 10 E2E aprobadas, incluida composición entre dos PDFs, posición global, undo/redo y avisos de preservación |
 
 El orden global intercalado se almacena como secuencia de páginas del proyecto, sin cambiar `documentId`, `sourcePageNumber` ni los bytes originales. Las advertencias informan que una exportación combinada puede invalidar firmas y no preservar elementos interactivos/estructurales; esta etapa aún no genera un archivo combinado. La generación y validación del PDF se reserva para la Etapa 13.
+
+## Validación de Etapa 12
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm test` | 12 archivos, 60 pruebas aprobadas; incluye serialización sin fuentes, migración de v0 a v1, validación de registros, cuota y relink conservando undo/redo |
+| `npm run test:e2e` | Build correcto; 11 E2E aprobadas, incluida recuperación después de recargar, rechazo de fuente incorrecta, verificación de huella/páginas y edición undo/redo recuperada |
+
+El proyecto y el historial de comandos se guardan en una única entrada de IndexedDB con debounce de 500 ms y botón de guardado inmediato. El serializador elimina las referencias `File` tanto de los documentos como de las operaciones históricas; la prueba verifica que tampoco se guardan bytes fuente. Al restaurar se validan versión, orden e invariantes de páginas. Como no se persisten handles, el usuario debe re-seleccionar cada fuente y se comprueba su nombre, tamaño, huella PDF y número de páginas antes de enlazarla. La cuota estimada es informativa (no reserva espacio); las escrituras notifican errores, incluida cuota agotada. Los datos pueden ser desalojados por el navegador. No se validó retención tras reinicio en Chrome/Edge nativos ni en el hardware de referencia.
