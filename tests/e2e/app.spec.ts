@@ -413,7 +413,7 @@ test('composes pages across source PDFs and explains preservation limits', async
     'Cada página conserva su archivo y número de origen',
   );
   await expect(notice).toContainText(
-    'El PDF combinado se valida antes de descargarlo',
+    'Cada parte se valida antes de descargarla',
   );
   await expect(notice).toContainText(
     'No se garantiza conservar formularios interactivos',
@@ -467,6 +467,43 @@ test('cancels PDF export without starting a download', async ({ page }) => {
     'Exportación cancelada; no se descargó ningún PDF.',
   );
   expect(downloadStarted).toBe(false);
+});
+
+test('splits ordered pages into independently validated downloads', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await page.goto('/');
+  await page.getByLabel('Seleccionar PDF').setInputFiles([
+    { name: 'source-a.pdf', mimeType: 'application/pdf', buffer: createManyPagesPdf(2) },
+    { name: 'source-b.pdf', mimeType: 'application/pdf', buffer: createCropBoxPdf() },
+  ]);
+  await expect(page.locator('.statusbar')).toContainText('3 páginas');
+  await page.getByRole('spinbutton', { name: 'Máximo de páginas por parte' }).fill('1');
+  const plan = page.locator('.export-part-plan');
+  await expect(plan).toContainText('Se crearán 3 partes');
+  await expect(plan).toContainText('Parte 1: páginas 1–1');
+  await expect(plan).toContainText('Parte 3: páginas 3–3');
+
+  const downloads: import('@playwright/test').Download[] = [];
+  page.on('download', (download) => downloads.push(download));
+  await page.getByRole('button', { name: 'Exportar en partes' }).click();
+  await expect.poll(() => downloads.length).toBe(3);
+  await expect(page.locator('.export-status')).toContainText('3 de 3 partes');
+  expect(downloads.map((download) => download.suggestedFilename())).toEqual([
+    'document-studio-parte-01.pdf',
+    'document-studio-parte-02.pdf',
+    'document-studio-parte-03.pdf',
+  ]);
+  const output = [];
+  for (const download of downloads) {
+    const path = await download.path();
+    if (!path) throw new Error('A validated part was not written to a download file.');
+    const pdf = await PDFDocument.load(await readFile(path));
+    expect(pdf.getPageCount()).toBe(1);
+    output.push(pdf.getPage(0));
+  }
+  expect(output[2]?.getCropBox()).toMatchObject({ x: 36, y: 36, width: 540, height: 720 });
+  expect(pageErrors).toEqual([]);
 });
 
 test('reorders, duplicates, rotates, deletes, and restores project pages', async ({

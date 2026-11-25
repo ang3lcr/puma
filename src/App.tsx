@@ -16,6 +16,7 @@ import { MarginEditor } from './features/margins/MarginEditor';
 import type { PdfBox } from './features/margins/types';
 import {
   estimatePdfExportMemory,
+  planPdfExportParts,
   PdfExportError,
   type PdfExportErrorCode,
   type PdfExportProgress,
@@ -113,12 +114,17 @@ interface PdfExportUiState {
   current: number;
   total: number;
   errorCode: PdfExportErrorCode | null;
+  completedParts?: number;
+  totalParts?: number;
+  partIndex?: number;
+  partCount?: number;
 }
 
 type PersistenceStatus = 'loading' | 'pending' | 'saving' | 'saved' | 'error';
 
 function App() {
   const [theme, setTheme] = useState<Theme>('dark');
+  const [maxPagesPerPart, setMaxPagesPerPart] = useState(1000);
   const [hydrationGate] = useState(() => {
     let resolve!: () => void;
     const promise = new Promise<void>((done) => {
@@ -145,6 +151,13 @@ function App() {
   const projectPages = getOrderedProjectPages(projectHistory.project);
   const activeProjectPages = projectPages.filter((page) => !page.isDeleted);
   const exportEstimate = estimatePdfExportMemory(documents, activeProjectPages);
+  const exportPartPlan = (() => {
+    try {
+      return planPdfExportParts(documents, activeProjectPages, maxPagesPerPart);
+    } catch {
+      return [];
+    }
+  })();
   const exportSources = new Map(
     documents.map((document) => [document.id, document]),
   );
@@ -163,8 +176,6 @@ function App() {
                 (page) => exportSources.get(page.documentId)?.metadata.encrypted,
               )
             ? 'encrypted-source'
-            : !exportEstimate.withinBudget
-              ? 'memory-budget'
               : null;
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
@@ -769,13 +780,14 @@ function App() {
     orientationScanAbort.current?.abort();
   }
 
-  async function runPdfExport(): Promise<void> {
-    if (pdfExportAbort.current || exportPreflightError) {
+  async function runPdfExport(asParts = false, startAtPart = 1): Promise<void> {
+    if (pdfExportAbort.current || exportPreflightError || (!asParts && !exportEstimate.withinBudget)) {
       return;
     }
 
     const controller = new AbortController();
     pdfExportAbort.current = controller;
+    let completedParts = startAtPart - 1;
     setPdfExportState({
       stage: 'preparing',
       current: 0,
@@ -784,10 +796,10 @@ function App() {
     });
 
     try {
-      const { exportProjectPdf } = await import(
+      const { exportProjectPdf, exportProjectPdfParts } = await import(
         './features/export/pdf-export'
       );
-      const result = await exportProjectPdf({
+      const options = {
         documents,
         pages: activeProjectPages,
         signal: controller.signal,
@@ -797,31 +809,48 @@ function App() {
             current: progress.current,
             total: progress.total,
             errorCode: null,
+            completedParts,
+            ...(asParts ? { totalParts: exportPartPlan.length } : {}),
+            ...(progress.partIndex !== undefined ? { partIndex: progress.partIndex } : {}),
+            ...(progress.partCount !== undefined ? { partCount: progress.partCount } : {}),
           });
         },
-      });
-      if (controller.signal.aborted) {
-        throw new PdfExportError('cancelled');
+      };
+      const downloadResult = (bytes: ArrayBuffer, name: string) => {
+        const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        try {
+          const download = window.document.createElement('a');
+          download.href = url;
+          download.download = name;
+          download.click();
+        } catch (error) {
+          URL.revokeObjectURL(url);
+          throw new PdfExportError('generation-failed', { cause: error });
+        }
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      };
+      let totalPages = 0;
+      if (asParts) {
+        for await (const part of exportProjectPdfParts(options, startAtPart, maxPagesPerPart)) {
+          if (controller.signal.aborted) throw new PdfExportError('cancelled');
+          downloadResult(part.result.bytes, `document-studio-parte-${String(part.index).padStart(2, '0')}.pdf`);
+          completedParts += 1;
+          totalPages += part.result.pageCount;
+          setPdfExportState({ stage: 'copying', current: completedParts, total: part.total, errorCode: null, completedParts, totalParts: part.total });
+        }
+      } else {
+        const result = await exportProjectPdf(options);
+        if (controller.signal.aborted) throw new PdfExportError('cancelled');
+        downloadResult(result.bytes, 'document-studio-combined.pdf');
+        totalPages = result.pageCount;
       }
-
-      const url = URL.createObjectURL(
-        new Blob([result.bytes], { type: 'application/pdf' }),
-      );
-      try {
-        const download = window.document.createElement('a');
-        download.href = url;
-        download.download = 'document-studio-combined.pdf';
-        download.click();
-      } catch (error) {
-        URL.revokeObjectURL(url);
-        throw new PdfExportError('generation-failed', { cause: error });
-      }
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setPdfExportState({
         stage: 'complete',
-        current: result.pageCount,
-        total: result.pageCount,
+        current: asParts ? completedParts : totalPages,
+        total: asParts ? exportPartPlan.length : totalPages,
         errorCode: null,
+        completedParts,
+        ...(asParts ? { totalParts: exportPartPlan.length } : {}),
       });
     } catch (error) {
       const code =
@@ -831,9 +860,11 @@ function App() {
       }
       setPdfExportState({
         stage: code === 'cancelled' ? 'cancelled' : 'failed',
-        current: 0,
-        total: activeProjectPages.length,
+        current: completedParts,
+        total: asParts ? exportPartPlan.length : activeProjectPages.length,
         errorCode: code,
+        completedParts,
+        ...(asParts ? { totalParts: exportPartPlan.length } : {}),
       });
     } finally {
       if (pdfExportAbort.current === controller) {
@@ -1946,6 +1977,32 @@ function App() {
                   .replace('{budget}', formatBytes(exportEstimate.budgetBytes))}
               </p>
               <p>{es.pdfExport.estimateDisclaimer}</p>
+              <label className="export-part-limit">
+                {es.pdfExport.pagesPerPart}
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={maxPagesPerPart}
+                  onChange={(event) => setMaxPagesPerPart(Math.max(1, Math.min(1000, Number(event.target.value) || 1)))}
+                  aria-label={es.pdfExport.pagesPerPart}
+                />
+              </label>
+              {exportEstimate.pageCount > 0 && exportPartPlan.length > 1 && (
+                <div className="export-part-plan" aria-label={es.pdfExport.partPlan.replace('{count}', formatNumber(exportPartPlan.length))}>
+                  <p>{es.pdfExport.partPlan.replace('{count}', formatNumber(exportPartPlan.length))}</p>
+                  <ol>
+                    {exportPartPlan.map((part) => (
+                      <li key={part.index}>
+                        {es.pdfExport.partRange
+                          .replace('{part}', formatNumber(part.index))
+                          .replace('{first}', formatNumber(part.firstPage))
+                          .replace('{last}', formatNumber(part.lastPage))}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
               <p>{es.pdfExport.signatureWarning}</p>
               <p>{es.pdfExport.preservationWarning}</p>
               {exportPreflightError && (
@@ -1953,12 +2010,16 @@ function App() {
                   {es.pdfExport.errors[exportPreflightError]}
                 </p>
               )}
+              {!exportEstimate.withinBudget && exportPartPlan.length === 0 && !exportPreflightError && (
+                <p className="export-error">{es.pdfExport.errors['memory-budget']}</p>
+              )}
               <div className="export-actions">
                 <button
                   className="import-button"
                   type="button"
                   disabled={
                     exportPreflightError !== null ||
+                    !exportEstimate.withinBudget ||
                     isLoadingDocument ||
                     isPdfExportRunning
                   }
@@ -1966,6 +2027,22 @@ function App() {
                 >
                   {es.pdfExport.button}
                 </button>
+                {exportPartPlan.length > 1 && (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={exportPreflightError !== null || isLoadingDocument || isPdfExportRunning}
+                  onClick={() => void runPdfExport(
+                    true,
+                    pdfExportState?.totalParts !== undefined &&
+                      ['cancelled', 'failed'].includes(pdfExportState.stage)
+                      ? (pdfExportState.completedParts ?? 0) + 1
+                      : 1,
+                  )}
+                  >
+                    {es.pdfExport.partsButton}
+                  </button>
+                )}
                 {isPdfExportRunning && (
                   <button
                     className="secondary-button"
@@ -2339,33 +2416,49 @@ function isAbortError(error: unknown): boolean {
 }
 
 function getPdfExportStatusMessage(state: PdfExportUiState): string {
+  const partSuffix = state.partIndex !== undefined && state.partCount !== undefined
+    ? ` (${es.pdfExport.status.part.replace('{part}', formatNumber(state.partIndex)).replace('{total}', formatNumber(state.partCount))})`
+    : '';
   switch (state.stage) {
     case 'preparing':
       return es.pdfExport.status.preparing;
     case 'loading':
       return es.pdfExport.status.loading
         .replace('{current}', formatNumber(state.current))
-        .replace('{total}', formatNumber(state.total));
+        .replace('{total}', formatNumber(state.total)) + partSuffix;
     case 'copying':
       return es.pdfExport.status.copying
         .replace('{current}', formatNumber(state.current))
-        .replace('{total}', formatNumber(state.total));
+        .replace('{total}', formatNumber(state.total)) + partSuffix;
     case 'serializing':
-      return es.pdfExport.status.serializing;
+      return es.pdfExport.status.serializing + partSuffix;
     case 'validating':
       return es.pdfExport.status.validating
         .replace('{current}', formatNumber(state.current))
-        .replace('{total}', formatNumber(state.total));
+        .replace('{total}', formatNumber(state.total)) + partSuffix;
     case 'cancelling':
       return es.pdfExport.status.cancelling;
     case 'complete':
+      if (state.totalParts !== undefined) {
+        return es.pdfExport.status.partsComplete
+          .replace('{done}', formatNumber(state.completedParts ?? 0))
+          .replace('{total}', formatNumber(state.totalParts));
+      }
       return es.pdfExport.status.complete.replace(
         '{count}',
         formatNumber(state.current),
       );
     case 'cancelled':
+      if (state.totalParts !== undefined) {
+        return es.pdfExport.status.cancelledParts
+          .replace('{done}', formatNumber(state.completedParts ?? 0))
+          .replace('{total}', formatNumber(state.totalParts));
+      }
       return es.pdfExport.status.cancelled;
     case 'failed':
+      if (state.totalParts !== undefined && (state.completedParts ?? 0) > 0) {
+        return `${es.pdfExport.status.partsPartial.replace('{done}', formatNumber(state.completedParts ?? 0)).replace('{total}', formatNumber(state.totalParts))} ${es.pdfExport.errors[state.errorCode ?? 'generation-failed']}`;
+      }
       return es.pdfExport.errors[state.errorCode ?? 'generation-failed'];
   }
 }

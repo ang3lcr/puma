@@ -207,3 +207,20 @@ El proyecto y el historial de comandos se guardan en una única entrada de Index
 | `npm run test:e2e` | Build correcto; 12 E2E aprobadas, incluida descarga validada con CropBox/rotación, orden entre PDFs fuente, páginas duplicadas/restauradas y cancelación sin descarga |
 
 Las E2E reabren los archivos descargados con pdf-lib y comprueban cantidad, geometría, rotación y orden global; internamente, la aplicación también valida cada salida con PDF.js antes de iniciar la descarga. La cancelación espera el término de la operación no interrumpible de pdf-lib y descarta el resultado, sin crear una descarga. Las fuentes cifradas o que faltan y el exceso sobre 1.5 GiB estimados impiden iniciar la exportación. La heurística y las pruebas con fixtures pequeños no demuestran el pico real de memoria ni cumplen el criterio de rendimiento en PDFs grandes; Chrome/Edge nativos y el hardware de referencia siguen pendientes.
+
+## Validación de Etapa 14
+
+Ejecución local en Windows 10.0.26200.0 con Node 24.19.0, npm 11.17.0, Playwright 1.65.1 y Chromium 159.0.8154.6:
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm run test` | 13 archivos, 73 pruebas aprobadas; incluye planificación por presupuesto/máximo de páginas, orden y exclusión de eliminadas, imposibilidad de una página individual, geometría CropBox/rotación, cancelación, error parcial y reintento desde la siguiente parte |
+| `npm run build` | Correcto; Vite 8.3.8, exportación diferida 423.52 kB / 176.99 kB gzip |
+| `npm run test:e2e` | Build correcto; 13 E2E aprobadas. La prueba de partes descarga 3 PDFs contiguos y reabre cada uno con pdf-lib; el flujo de producción valida cada salida completa con PDF.js antes de descargarla y se comprobó CropBox en la tercera parte |
+| `git diff --check` | Correcto |
+
+La prueba unitaria sustituye el adaptador de apertura PDF.js por un lector simulado, porque en Vitest el `?url` del worker se resolvió como `C:\node_modules\pdfjs-dist`. La E2E ejecuta el build real y verifica la validación de cada archivo mediante PDF.js en Chromium; pdf-lib vuelve a abrir los archivos descargados en la prueba para comprobar cantidad y CropBox. Se probaron cancelación, error y reintento con fixtures pequeños, sin construir PDFs grandes. El presupuesto de 1.5 GiB y la estimación son heurísticos, no una medición ni una garantía de memoria. Chrome/Edge nativos y el equipo de referencia no están disponibles en este entorno; las métricas de hardware siguen pendientes.
+
+La primera ejecución completa de E2E tuvo 12 aprobadas y 1 fallo porque el texto esperado en la prueba de composición quedó obsoleto tras actualizar el aviso; se corrigió la expectativa y la repetición terminó con 13/13 aprobadas. Playwright mostró la advertencia de entorno `NO_COLOR` ignorada por `FORCE_COLOR`; no afectó los resultados.

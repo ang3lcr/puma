@@ -7,9 +7,44 @@ import {
   estimatePdfExportMemory,
   PdfExportError,
   type PdfExportOptions,
+  planPdfExportParts,
   type PdfExportProgress,
   type PdfExportResult,
 } from './pdf-export-common';
+
+export async function* exportProjectPdfParts(options: PdfExportOptions, startAtPart = 1, maxPagesPerPart = Number.POSITIVE_INFINITY): AsyncGenerator<{
+  readonly index: number;
+  readonly total: number;
+  readonly firstPage: number;
+  readonly lastPage: number;
+  readonly result: PdfExportResult;
+}> {
+  const activePages = options.pages.filter((page) => !page.isDeleted);
+  const documentsById = new Map(options.documents.map((document) => [document.id, document]));
+  for (const page of activePages) {
+    const document = documentsById.get(page.documentId);
+    if (!document) throw new PdfExportError('invalid-project');
+    if (!document.file) throw new PdfExportError('missing-source');
+    if (document.metadata.encrypted) throw new PdfExportError('encrypted-source');
+  }
+  const plans = planPdfExportParts(options.documents, activePages, maxPagesPerPart);
+  for (const plan of plans) {
+    if (plan.index < startAtPart) continue;
+    checkCancelled(options.signal);
+    const pageIds = new Set(plan.pageIds);
+    const result = await exportProjectPdf({
+      ...options,
+      pages: activePages.filter((page) => pageIds.has(page.id)),
+      onProgress: (progress) => options.onProgress?.({
+        ...progress,
+        partIndex: plan.index,
+        partCount: plans.length,
+      }),
+    });
+    checkCancelled(options.signal);
+    yield { index: plan.index, total: plans.length, firstPage: plan.firstPage, lastPage: plan.lastPage, result };
+  }
+}
 
 interface ExpectedPageGeometry {
   readonly cropBox: PdfBox;

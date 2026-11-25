@@ -197,7 +197,7 @@ export const es = {
     sourceNote:
       'Cada página conserva su archivo y número de origen; moverla solo cambia su posición en la combinación.',
     exportNote:
-      'El PDF combinado se valida antes de descargarlo; la exportación por partes para proyectos grandes se implementará en la Etapa 14.',
+      'Cada parte se valida antes de descargarla; las salidas anteriores se conservan si una parte posterior falla.',
     signatureWarning:
       'La exportación combinada invalida las firmas digitales existentes.',
     preservationWarning:
@@ -216,8 +216,12 @@ export const es = {
     memoryEstimate:
       'Pico de memoria estimado: {estimate} de {budget}.',
     estimateDisclaimer:
-      'Estimación conservadora; las exportaciones mayores que el presupuesto se habilitarán en una etapa posterior.',
+      'La estimación es heurística y no garantiza el pico real de memoria.',
     button: 'Exportar PDF combinado',
+    partsButton: 'Exportar en partes',
+    pagesPerPart: 'Máximo de páginas por parte',
+    partPlan: 'Se crearán {count} partes. Cada parte conserva este tramo del orden global:',
+    partRange: 'Parte {part}: páginas {first}–{last}',
     cancelButton: 'Cancelar exportación',
     signatureWarning:
       'Las firmas digitales existentes perderán validez en el PDF exportado.',
@@ -227,11 +231,15 @@ export const es = {
       preparing: 'Preparando la exportación…',
       loading: 'Cargando fuente {current} de {total}…',
       copying: 'Copiando página {current} de {total}…',
+      part: 'parte {part} de {total}',
       serializing: 'Generando el PDF en memoria…',
       validating: 'Validando página {current} de {total}…',
       cancelling: 'Cancelación solicitada; esperando a que termine la operación actual…',
       complete: 'PDF validado y descargado ({count} páginas).',
+      partsComplete: 'Se validaron y descargaron {done} de {total} partes.',
+      partsPartial: 'Se completaron {done} de {total} partes antes del error.',
       cancelled: 'Exportación cancelada; no se descargó ningún PDF.',
+      cancelledParts: 'Exportación cancelada; {done} de {total} partes ya se validaron y descargaron.',
       failed: 'No se pudo completar la exportación.',
     },
     errors: {
@@ -243,7 +251,7 @@ export const es = {
       'invalid-project':
         'El proyecto contiene una página o geometría no válida; revisa el proyecto antes de exportar.',
       'memory-budget':
-        'La estimación supera el presupuesto de memoria de 1.5 GiB. La exportación por partes se añadirá en una etapa posterior.',
+        'Una página individual supera el presupuesto heurístico de 1.5 GiB. Reduce el proyecto o el tamaño de la fuente antes de exportar.',
       'missing-source':
         'Faltan archivos PDF de origen. Vuelve a seleccionarlos para recuperar el proyecto.',
       'no-pages': 'No hay páginas activas para exportar.',

@@ -1,6 +1,6 @@
 # ADR 0001 — Presupuesto y plan B para PDF grandes
 
-- **Estado:** decisión aprobada en Etapa 0; exportación normal implementada en Etapa 13, pendiente de aprobación.
+- **Estado:** decisión aprobada en Etapa 0; exportación normal implementada en Etapa 13 y por partes en Etapa 14.
 - **Fecha:** 2026-11-25.
 
 ## Contexto
@@ -19,7 +19,7 @@ PDF.js 6.5.438 pudo leer por rangos un PDF de 500 MiB en el navegador integrado:
 
 Mantener pdf-lib únicamente para exportaciones dentro del presupuesto y preservar el contenido digital. Estimar `300 MiB + 3 × max(bytes de las fuentes únicas, salida estimada por página)` y comparar con un presupuesto heurístico de 1.5 GiB por pestaña. La salida estimada suma el tamaño de cada fuente dividido por su número de páginas para cada página activa (incluidos duplicados). Rechazar si falta una fuente, hay páginas cifradas o el presupuesto se supera; exportaciones por partes corresponden a Etapa 14.
 
-La Etapa 13 carga cada fuente única, copia páginas activas en el orden global, aplica giro y CropBox y serializa el resultado en memoria. Antes de crear la descarga, reabre el buffer completo con PDF.js y valida cantidad, geometría visible y rotación de cada página. El usuario puede cancelar entre fases; pdf-lib no expone abortabilidad de sus operaciones internas, por lo que la interfaz espera a que termine la operación en curso y descarta el resultado antes de iniciar cualquier descarga. La estimación es heurística y no sustituye las mediciones de memoria con documentos realistas en Chrome/Edge.
+La Etapa 13 carga cada fuente única, copia páginas activas en orden global, aplica giro y CropBox y valida la salida completa con PDF.js antes de descargar. La Etapa 14 calcula partes contiguas con el mismo estimador. El usuario ve todos los rangos y puede establecer un máximo de páginas por parte. Cada parte se genera, valida por completo y descarga antes de construir la siguiente; así no se acumulan las salidas en memoria. Si una parte posterior falla o se cancela, las partes completadas quedan descargadas y la interfaz permite reintentar desde la parte pendiente. La cancelación durante pdf-lib espera que termine su operación no interrumpible y descarta esa salida. La estimación sigue siendo heurística y no sustituye las mediciones de memoria con PDFs realistas en Chrome/Edge.
 
 ## Consecuencias
 

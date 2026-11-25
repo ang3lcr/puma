@@ -1,6 +1,6 @@
 # Roadmap
 
-**Estado actual:** Etapas 0–12 aprobadas; Etapa 13 completada y pendiente de aprobación. Cada etapa se desarrolla en una interacción, se valida y documenta, se crea su commit/tag y luego se detiene hasta recibir aprobación. No avanzar automáticamente.
+**Estado actual:** Etapas 0–14 completadas; Etapas 15–16 pendientes de validación y documentación final.
 
 | Etapa | Alcance | Estado |
 |---|---|---|
@@ -17,14 +17,14 @@
 | 10 | Editor de márgenes, CropBox y recorte físico explícito | Completada y aprobada |
 | 11 | Combinación de documentos y limitaciones de preservación | Completada y aprobada |
 | 12 | Guardado, autoguardado, recuperación, cuotas y migraciones | Completada y aprobada |
-| 13 | Exportación normal, estimación, validación y cancelación segura | Completada; pendiente de aprobación |
-| 14 | Exportación grande, división por partes y recuperación de fallos | Pendiente |
+| 13 | Exportación normal, estimación, validación y cancelación segura | Completada y aprobada; commit `064402b` |
+| 14 | Exportación grande, división por partes y recuperación de fallos | Completada; exportación por partes, validación individual y reintento |
 | 15 | Estrés, rendimiento, seguridad local y regresión en Chrome/Edge | Pendiente |
 | 16 | Guías finales, limitaciones, instalación y distribución | Pendiente |
 
 ## Condición de salida por etapa
 
-Ejecutar los scripts disponibles de TypeScript, lint, pruebas, build y E2E pertinentes; corregir errores; actualizar documentación y ADRs; registrar los resultados reales; crear `etapa-N-completada`; presentar informe y detenerse para aprobación.
+Ejecutar los scripts disponibles de TypeScript, lint, pruebas, build y E2E pertinentes; corregir errores; actualizar documentación y ADRs; registrar resultados reales. Crear commit y etiqueta de etapa solo si se verificaron sus criterios de aceptación.
 
 ## Sub-etapas
 
