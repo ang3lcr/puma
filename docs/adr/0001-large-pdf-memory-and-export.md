@@ -1,6 +1,6 @@
 # ADR 0001 — Presupuesto y plan B para PDF grandes
 
-- **Estado:** aprobado en Etapa 0; implementación/validación pendiente.
+- **Estado:** decisión aprobada en Etapa 0; exportación normal implementada en Etapa 13, pendiente de aprobación.
 - **Fecha:** 2026-11-25.
 
 ## Contexto
@@ -17,11 +17,15 @@ PDF.js 6.5.438 pudo leer por rangos un PDF de 500 MiB en el navegador integrado:
 
 ## Decisión propuesta
 
-Mantener pdf-lib únicamente para exportaciones dentro del presupuesto y preservar el contenido digital. Estimar de forma conservadora `300 MiB + 3 × max(bytes fuente, bytes de salida estimados)` y comparar con el presupuesto de 1.5 GiB por pestaña. Advertir y ofrecer exportaciones por rangos/partes cuando se exceda; rechazar una exportación única si no es segura. Nunca completar ni mostrar como válido un archivo parcial. Validar el buffer íntegro con PDF.js antes de escribirlo al destino.
+Mantener pdf-lib únicamente para exportaciones dentro del presupuesto y preservar el contenido digital. Estimar `300 MiB + 3 × max(bytes de las fuentes únicas, salida estimada por página)` y comparar con un presupuesto heurístico de 1.5 GiB por pestaña. La salida estimada suma el tamaño de cada fuente dividido por su número de páginas para cada página activa (incluidos duplicados). Rechazar si falta una fuente, hay páginas cifradas o el presupuesto se supera; exportaciones por partes corresponden a Etapa 14.
+
+La Etapa 13 carga cada fuente única, copia páginas activas en el orden global, aplica giro y CropBox y serializa el resultado en memoria. Antes de crear la descarga, reabre el buffer completo con PDF.js y valida cantidad, geometría visible y rotación de cada página. El usuario puede cancelar entre fases; pdf-lib no expone abortabilidad de sus operaciones internas, por lo que la interfaz espera a que termine la operación en curso y descarta el resultado antes de iniciar cualquier descarga. La estimación es heurística y no sustituye las mediciones de memoria con documentos realistas en Chrome/Edge.
 
 ## Consecuencias
 
 - Importar un archivo de 500 MiB no implica prometer exportarlo como un solo PDF.
 - Los tamaños de salida se estiman con incertidumbre; imágenes y decodificación pueden aumentar memoria.
+- La exportación no preserva de forma garantizada formularios, anotaciones, marcadores, capas, adjuntos ni metadatos; cualquier firma digital deja de ser válida.
+- La validación funcional confirma relectura y geometría; aún falta medir el pico real con PDFs grandes/escaneados y navegadores nativos de referencia.
 - Medir en Chrome/Edge de referencia antes de aprobar el límite definitivo.
 - Investigar PDFium/WASM solo si el spike adicional documenta compatibilidad, licencias y una mejora medida.

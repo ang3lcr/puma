@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–12 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–13 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
 
 ## Entorno de referencia
 
@@ -195,3 +195,15 @@ El orden global intercalado se almacena como secuencia de páginas del proyecto,
 | `npm run test:e2e` | Build correcto; 11 E2E aprobadas, incluida recuperación después de recargar, rechazo de fuente incorrecta, verificación de huella/páginas y edición undo/redo recuperada |
 
 El proyecto y el historial de comandos se guardan en una única entrada de IndexedDB con debounce de 500 ms y botón de guardado inmediato. El serializador elimina las referencias `File` tanto de los documentos como de las operaciones históricas; la prueba verifica que tampoco se guardan bytes fuente. Al restaurar se validan versión, orden e invariantes de páginas. Como no se persisten handles, el usuario debe re-seleccionar cada fuente y se comprueba su nombre, tamaño, huella PDF y número de páginas antes de enlazarla. La cuota estimada es informativa (no reserva espacio); las escrituras notifican errores, incluida cuota agotada. Los datos pueden ser desalojados por el navegador. No se validó retención tras reinicio en Chrome/Edge nativos ni en el hardware de referencia.
+
+## Validación de Etapa 13
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm test` | 13 archivos, 68 pruebas aprobadas; incluye presupuesto y estimación por fuentes únicas, fuentes cifradas/faltantes y cancelación antes y durante la copia |
+| `npm run build` | Correcto; shell JS 352.04 kB / 106.04 kB gzip, exportación diferida 422.87 kB / 176.79 kB gzip, importación PDF.js 447.47 kB / 134.95 kB gzip y Worker PDF.js 1,271.91 kB |
+| `npm run test:e2e` | Build correcto; 12 E2E aprobadas, incluida descarga validada con CropBox/rotación, orden entre PDFs fuente, páginas duplicadas/restauradas y cancelación sin descarga |
+
+Las E2E reabren los archivos descargados con pdf-lib y comprueban cantidad, geometría, rotación y orden global; internamente, la aplicación también valida cada salida con PDF.js antes de iniciar la descarga. La cancelación espera el término de la operación no interrumpible de pdf-lib y descarta el resultado, sin crear una descarga. Las fuentes cifradas o que faltan y el exceso sobre 1.5 GiB estimados impiden iniciar la exportación. La heurística y las pruebas con fixtures pequeños no demuestran el pico real de memoria ni cumplen el criterio de rendimiento en PDFs grandes; Chrome/Edge nativos y el hardware de referencia siguen pendientes.

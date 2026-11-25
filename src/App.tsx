@@ -14,6 +14,13 @@ import { PageViewer } from './features/pages/PageViewer';
 import type { PageInfo } from './features/pages/PageViewer';
 import { MarginEditor } from './features/margins/MarginEditor';
 import type { PdfBox } from './features/margins/types';
+import {
+  estimatePdfExportMemory,
+  PdfExportError,
+  type PdfExportErrorCode,
+  type PdfExportProgress,
+  type PdfExportStage,
+} from './features/export/pdf-export-common';
 import { ByteLruCache } from './features/pages/thumbnail-cache';
 import {
   getBlankPageReasonLabel,
@@ -93,6 +100,21 @@ interface OrientationScanState {
   total: number;
 }
 
+type PdfExportUiStage =
+  | PdfExportStage
+  | 'preparing'
+  | 'cancelling'
+  | 'complete'
+  | 'cancelled'
+  | 'failed';
+
+interface PdfExportUiState {
+  stage: PdfExportUiStage;
+  current: number;
+  total: number;
+  errorCode: PdfExportErrorCode | null;
+}
+
 type PersistenceStatus = 'loading' | 'pending' | 'saving' | 'saved' | 'error';
 
 function App() {
@@ -122,6 +144,28 @@ function App() {
   const documents = getOrderedProjectDocuments(projectHistory.project);
   const projectPages = getOrderedProjectPages(projectHistory.project);
   const activeProjectPages = projectPages.filter((page) => !page.isDeleted);
+  const exportEstimate = estimatePdfExportMemory(documents, activeProjectPages);
+  const exportSources = new Map(
+    documents.map((document) => [document.id, document]),
+  );
+  const exportPreflightError: PdfExportErrorCode | null =
+    activeProjectPages.length === 0
+      ? 'no-pages'
+      : activeProjectPages.some(
+            (page) => !exportSources.has(page.documentId),
+          )
+        ? 'invalid-project'
+        : activeProjectPages.some(
+              (page) => !exportSources.get(page.documentId)?.file,
+            )
+          ? 'missing-source'
+          : activeProjectPages.some(
+                (page) => exportSources.get(page.documentId)?.metadata.encrypted,
+              )
+            ? 'encrypted-source'
+            : !exportEstimate.withinBudget
+              ? 'memory-budget'
+              : null;
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [activePageInfo, setActivePageInfo] = useState<
@@ -130,6 +174,11 @@ function App() {
   const [blankScan, setBlankScan] = useState<BlankScanState | null>(null);
   const [orientationScan, setOrientationScan] =
     useState<OrientationScanState | null>(null);
+  const [pdfExportState, setPdfExportState] =
+    useState<PdfExportUiState | null>(null);
+  const isPdfExportRunning =
+    pdfExportState !== null &&
+    !['complete', 'cancelled', 'failed'].includes(pdfExportState.stage);
   const [selectedOrientationPageIds, setSelectedOrientationPageIds] =
     useState<ReadonlySet<string>>(() => new Set());
   const [isImporting, setIsImporting] = useState(false);
@@ -172,6 +221,7 @@ function App() {
   }, []);
   const blankScanAbort = useRef<AbortController | null>(null);
   const orientationScanAbort = useRef<AbortController | null>(null);
+  const pdfExportAbort = useRef<AbortController | null>(null);
   const isDark = theme === 'dark';
   const isLoadingDocument = isImporting || isOpeningDocument || isRelinking;
   const documentsNeedingRelink = documents.filter(
@@ -719,6 +769,91 @@ function App() {
     orientationScanAbort.current?.abort();
   }
 
+  async function runPdfExport(): Promise<void> {
+    if (pdfExportAbort.current || exportPreflightError) {
+      return;
+    }
+
+    const controller = new AbortController();
+    pdfExportAbort.current = controller;
+    setPdfExportState({
+      stage: 'preparing',
+      current: 0,
+      total: activeProjectPages.length,
+      errorCode: null,
+    });
+
+    try {
+      const { exportProjectPdf } = await import(
+        './features/export/pdf-export'
+      );
+      const result = await exportProjectPdf({
+        documents,
+        pages: activeProjectPages,
+        signal: controller.signal,
+        onProgress: (progress: PdfExportProgress) => {
+          setPdfExportState({
+            stage: progress.stage,
+            current: progress.current,
+            total: progress.total,
+            errorCode: null,
+          });
+        },
+      });
+      if (controller.signal.aborted) {
+        throw new PdfExportError('cancelled');
+      }
+
+      const url = URL.createObjectURL(
+        new Blob([result.bytes], { type: 'application/pdf' }),
+      );
+      try {
+        const download = window.document.createElement('a');
+        download.href = url;
+        download.download = 'document-studio-combined.pdf';
+        download.click();
+      } catch (error) {
+        URL.revokeObjectURL(url);
+        throw new PdfExportError('generation-failed', { cause: error });
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setPdfExportState({
+        stage: 'complete',
+        current: result.pageCount,
+        total: result.pageCount,
+        errorCode: null,
+      });
+    } catch (error) {
+      const code =
+        error instanceof PdfExportError ? error.code : 'generation-failed';
+      if (code !== 'cancelled') {
+        console.error('Unable to export the project PDF.', error);
+      }
+      setPdfExportState({
+        stage: code === 'cancelled' ? 'cancelled' : 'failed',
+        current: 0,
+        total: activeProjectPages.length,
+        errorCode: code,
+      });
+    } finally {
+      if (pdfExportAbort.current === controller) {
+        pdfExportAbort.current = null;
+      }
+    }
+  }
+
+  function cancelPdfExport(): void {
+    if (!pdfExportAbort.current) {
+      return;
+    }
+    pdfExportAbort.current.abort();
+    setPdfExportState((current) =>
+      current
+        ? { ...current, stage: 'cancelling', errorCode: null }
+        : current,
+    );
+  }
+
   useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent): void => {
       if ((!event.ctrlKey && !event.metaKey) || event.altKey) {
@@ -804,6 +939,7 @@ function App() {
     return () => {
       blankScanAbort.current?.abort();
       orientationScanAbort.current?.abort();
+      pdfExportAbort.current?.abort();
     };
   }, []);
 
@@ -1786,6 +1922,84 @@ function App() {
             <p className="eyebrow">{es.app.localSession}</p>
             <h2 id="properties-heading">{es.properties.heading}</h2>
           </div>
+          {documents.length > 0 && (
+            <section
+              className="export-panel"
+              aria-label={es.pdfExport.region}
+            >
+              <h3>{es.pdfExport.heading}</h3>
+              <p>{es.pdfExport.description}</p>
+              <p>
+                {es.pdfExport.pageSummary
+                  .replace('{pages}', formatNumber(exportEstimate.pageCount))
+                  .replace(
+                    '{sources}',
+                    formatNumber(exportEstimate.sourceDocumentCount),
+                  )}
+              </p>
+              <p>
+                {es.pdfExport.memoryEstimate
+                  .replace(
+                    '{estimate}',
+                    formatBytes(exportEstimate.estimatedPeakBytes),
+                  )
+                  .replace('{budget}', formatBytes(exportEstimate.budgetBytes))}
+              </p>
+              <p>{es.pdfExport.estimateDisclaimer}</p>
+              <p>{es.pdfExport.signatureWarning}</p>
+              <p>{es.pdfExport.preservationWarning}</p>
+              {exportPreflightError && (
+                <p className="export-error">
+                  {es.pdfExport.errors[exportPreflightError]}
+                </p>
+              )}
+              <div className="export-actions">
+                <button
+                  className="import-button"
+                  type="button"
+                  disabled={
+                    exportPreflightError !== null ||
+                    isLoadingDocument ||
+                    isPdfExportRunning
+                  }
+                  onClick={() => void runPdfExport()}
+                >
+                  {es.pdfExport.button}
+                </button>
+                {isPdfExportRunning && (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={pdfExportState?.stage === 'cancelling'}
+                    onClick={cancelPdfExport}
+                  >
+                    {es.pdfExport.cancelButton}
+                  </button>
+                )}
+              </div>
+              {isPdfExportRunning && pdfExportState && (
+                <progress
+                  max={Math.max(1, pdfExportState.total)}
+                  value={pdfExportState.current}
+                  aria-label={es.pdfExport.progress}
+                />
+              )}
+              {pdfExportState && (
+                <p
+                  className={
+                    pdfExportState.stage === 'failed'
+                      ? 'export-error'
+                      : 'export-status'
+                  }
+                  role={
+                    pdfExportState.stage === 'failed' ? 'alert' : 'status'
+                  }
+                >
+                  {getPdfExportStatusMessage(pdfExportState)}
+                </p>
+              )}
+            </section>
+          )}
           {activeDocument ? (
             <div className="document-properties">
               <h3>{es.properties.documentHeading}</h3>
@@ -2122,6 +2336,38 @@ function safeFileName(fileName: string): string {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
+}
+
+function getPdfExportStatusMessage(state: PdfExportUiState): string {
+  switch (state.stage) {
+    case 'preparing':
+      return es.pdfExport.status.preparing;
+    case 'loading':
+      return es.pdfExport.status.loading
+        .replace('{current}', formatNumber(state.current))
+        .replace('{total}', formatNumber(state.total));
+    case 'copying':
+      return es.pdfExport.status.copying
+        .replace('{current}', formatNumber(state.current))
+        .replace('{total}', formatNumber(state.total));
+    case 'serializing':
+      return es.pdfExport.status.serializing;
+    case 'validating':
+      return es.pdfExport.status.validating
+        .replace('{current}', formatNumber(state.current))
+        .replace('{total}', formatNumber(state.total));
+    case 'cancelling':
+      return es.pdfExport.status.cancelling;
+    case 'complete':
+      return es.pdfExport.status.complete.replace(
+        '{count}',
+        formatNumber(state.current),
+      );
+    case 'cancelled':
+      return es.pdfExport.status.cancelled;
+    case 'failed':
+      return es.pdfExport.errors[state.errorCode ?? 'generation-failed'];
+  }
 }
 
 function getImportFailureMessage(error: unknown): string {

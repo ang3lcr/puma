@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+import { PDFDocument } from 'pdf-lib';
 import { createMinimalPdf } from '../fixtures/minimal-pdf';
 import { createManyPagesPdf } from '../fixtures/many-pages-pdf';
 import { createPasswordProtectedPdf } from '../fixtures/password-protected-pdf';
@@ -365,6 +367,20 @@ test('crops a page by dragging a guide and supports keyboard adjustment', async 
   await topHandle.focus();
   await topHandle.press('ArrowDown');
   await expect(top).not.toHaveValue(String(draggedMargin));
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exportar PDF combinado' }).click();
+  const download = await downloadPromise;
+  await expect(page.locator('.export-status')).toContainText(
+    'PDF validado y descargado (1 páginas).',
+  );
+  const downloadPath = await download.path();
+  if (!downloadPath) {
+    throw new Error('The exported PDF was not written to a download file.');
+  }
+  const exportedPdf = await PDFDocument.load(await readFile(downloadPath));
+  expect(exportedPdf.getPageCount()).toBe(1);
+  expect(exportedPdf.getPage(0).getRotation().angle).toBe(90);
+  expect(exportedPdf.getPage(0).getCropBox().width).toBeLessThan(540);
   expect(pageErrors).toEqual([]);
 });
 
@@ -384,7 +400,7 @@ test('composes pages across source PDFs and explains preservation limits', async
     {
       name: 'source-b.pdf',
       mimeType: 'application/pdf',
-      buffer: createMinimalPdf(),
+      buffer: createCropBoxPdf(),
     },
   ]);
   await expect(page.locator('.statusbar')).toContainText('3 páginas');
@@ -397,7 +413,7 @@ test('composes pages across source PDFs and explains preservation limits', async
     'Cada página conserva su archivo y número de origen',
   );
   await expect(notice).toContainText(
-    'La exportación se implementará en la Etapa 13.',
+    'El PDF combinado se valida antes de descargarlo',
   );
   await expect(notice).toContainText(
     'No se garantiza conservar formularios interactivos',
@@ -418,7 +434,39 @@ test('composes pages across source PDFs and explains preservation limits', async
   await expect(sequencePosition).toContainText('1 / 3');
   await page.getByRole('button', { name: 'Seleccionar página 2' }).click();
   await expect(sequencePosition).toContainText('3 / 3');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exportar PDF combinado' }).click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+  if (!downloadPath) {
+    throw new Error('The exported PDF was not written to a download file.');
+  }
+  const exportedPdf = await PDFDocument.load(await readFile(downloadPath));
+  expect(exportedPdf.getPageCount()).toBe(3);
+  expect(exportedPdf.getPage(1).getCropBox().width).toBe(540);
+  expect(exportedPdf.getPage(1).getCropBox().height).toBe(720);
   expect(pageErrors).toEqual([]);
+});
+
+test('cancels PDF export without starting a download', async ({ page }) => {
+  let downloadStarted = false;
+  page.on('download', () => {
+    downloadStarted = true;
+  });
+
+  await page.goto('/');
+  await page.getByLabel('Seleccionar PDF').setInputFiles({
+    name: 'export-cancellation.pdf',
+    mimeType: 'application/pdf',
+    buffer: createMinimalPdf(),
+  });
+
+  await page.getByRole('button', { name: 'Exportar PDF combinado' }).click();
+  await page.getByRole('button', { name: 'Cancelar exportación' }).click();
+  await expect(page.locator('.export-status')).toContainText(
+    'Exportación cancelada; no se descargó ningún PDF.',
+  );
+  expect(downloadStarted).toBe(false);
 });
 
 test('reorders, duplicates, rotates, deletes, and restores project pages', async ({
@@ -460,6 +508,17 @@ test('reorders, duplicates, rotates, deletes, and restores project pages', async
   await expect(page.locator('.statusbar')).toContainText('2 páginas');
   await expect(page.locator('.thumbnail-card-deleted')).toHaveCount(0);
 
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exportar PDF combinado' }).click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+  if (!downloadPath) {
+    throw new Error('The exported PDF was not written to a download file.');
+  }
+  const exportedPdf = await PDFDocument.load(await readFile(downloadPath));
+  expect(exportedPdf.getPageCount()).toBe(2);
+  expect(exportedPdf.getPage(0).getRotation().angle).toBe(90);
+  expect(exportedPdf.getPage(1).getRotation().angle).toBe(0);
   expect(pageErrors).toEqual([]);
 });
 

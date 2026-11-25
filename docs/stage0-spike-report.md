@@ -91,7 +91,7 @@ Los assets revisados incluyen un bundle `tesseract.js` de 1.41 MB, worker de 111
 
 ## 8. Licencias y decisiones
 
-Las versiones/licencias consultadas están en [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES). PDF.js es Apache-2.0; pdf-lib MIT; OpenCV.js y Tesseract.js/core Apache-2.0; datos OSD MIT. PDF.js 6.5.438 se integró con el lockfile en Etapa 2; pdf-lib, OpenCV y OCR siguen como candidatos/spikes. Transitivas relevantes incluyen pako (MIT AND Zlib), `@pdf-lib/standard-fonts` y `@pdf-lib/upng` (MIT), idb-keyval (Apache-2.0) y wasm-feature-detect (Apache-2.0). MuPDF no se selecciona por AGPL.
+Las versiones/licencias consultadas están en [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES). PDF.js es Apache-2.0; pdf-lib MIT; OpenCV.js y Tesseract.js/core Apache-2.0; datos OSD MIT. PDF.js 6.5.438 se integró con el lockfile en Etapa 2 y pdf-lib 1.17.1 pasó a dependencia de producción en Etapa 13; OpenCV y OCR siguen como candidatos/spikes. Transitivas relevantes incluyen pako (MIT AND Zlib), `@pdf-lib/standard-fonts` y `@pdf-lib/upng` (MIT), idb-keyval (Apache-2.0) y wasm-feature-detect (Apache-2.0). MuPDF no se selecciona por AGPL.
 
 ADRs propuestos:
 
@@ -108,6 +108,6 @@ ADRs propuestos:
 - Probar PDFs reales/sintéticos con imágenes grandes, texto seleccionable, mezcla de ambos, páginas rotadas, cifrado, formularios, anotaciones, firmas y xref no trivial.
 - Construir y etiquetar fixtures para medir falsos positivos de páginas en blanco y precisión/cobertura de orientación.
 - Medir el flujo integrado con PDFs grandes en Chrome/Edge nativos de aceptación.
-- Confirmar qué sucede con PDFs que restringen copia/modificación y aprobar el presupuesto/método de exportación por partes.
+- Medir el presupuesto heurístico con PDFs realistas en Chrome/Edge; la exportación normal se integró en Etapa 13 y la división por partes corresponde a Etapa 14. Confirmar además el comportamiento con PDFs que restringen copia/modificación.
 
 No se ejecutaron scripts de lint, typecheck, unit, build ni E2E durante Etapa 0: no existía proyecto inicial y esa etapa no debía implementarlo. El diseño y los criterios fueron aprobados; el reporte se conserva como evidencia de los spikes.

@@ -197,7 +197,7 @@ export const es = {
     sourceNote:
       'Cada página conserva su archivo y número de origen; moverla solo cambia su posición en la combinación.',
     exportNote:
-      'La composición organiza el proyecto, pero todavía no genera un PDF. La exportación se implementará en la Etapa 13.',
+      'El PDF combinado se valida antes de descargarlo; la exportación por partes para proyectos grandes se implementará en la Etapa 14.',
     signatureWarning:
       'La exportación combinada invalida las firmas digitales existentes.',
     preservationWarning:
@@ -206,6 +206,51 @@ export const es = {
       'Se detectaron firmas digitales en {count} documentos de origen.',
     detectedForms:
       'Se detectaron formularios en {count} documentos; pueden perder interactividad.',
+  },
+  pdfExport: {
+    region: 'Exportación PDF',
+    heading: 'Exportar proyecto',
+    description:
+      'Genera un PDF con las páginas activas en su orden actual, aplicando los giros y recortes.',
+    pageSummary: '{pages} páginas activas de {sources} fuentes.',
+    memoryEstimate:
+      'Pico de memoria estimado: {estimate} de {budget}.',
+    estimateDisclaimer:
+      'Estimación conservadora; las exportaciones mayores que el presupuesto se habilitarán en una etapa posterior.',
+    button: 'Exportar PDF combinado',
+    cancelButton: 'Cancelar exportación',
+    signatureWarning:
+      'Las firmas digitales existentes perderán validez en el PDF exportado.',
+    preservationWarning:
+      'No se garantiza conservar formularios interactivos, anotaciones, marcadores, capas, adjuntos ni metadatos.',
+    status: {
+      preparing: 'Preparando la exportación…',
+      loading: 'Cargando fuente {current} de {total}…',
+      copying: 'Copiando página {current} de {total}…',
+      serializing: 'Generando el PDF en memoria…',
+      validating: 'Validando página {current} de {total}…',
+      cancelling: 'Cancelación solicitada; esperando a que termine la operación actual…',
+      complete: 'PDF validado y descargado ({count} páginas).',
+      cancelled: 'Exportación cancelada; no se descargó ningún PDF.',
+      failed: 'No se pudo completar la exportación.',
+    },
+    errors: {
+      cancelled: 'Exportación cancelada.',
+      'encrypted-source':
+        'No se pueden exportar PDFs cifrados. Quita la protección y vuelve a importarlos.',
+      'generation-failed':
+        'No se pudo generar el PDF. Los archivos originales no se modificaron.',
+      'invalid-project':
+        'El proyecto contiene una página o geometría no válida; revisa el proyecto antes de exportar.',
+      'memory-budget':
+        'La estimación supera el presupuesto de memoria de 1.5 GiB. La exportación por partes se añadirá en una etapa posterior.',
+      'missing-source':
+        'Faltan archivos PDF de origen. Vuelve a seleccionarlos para recuperar el proyecto.',
+      'no-pages': 'No hay páginas activas para exportar.',
+      'validation-failed':
+        'El PDF generado no superó la validación; no se descargó ningún archivo.',
+    },
+    progress: 'Progreso de exportación',
   },
   viewer: {
     region: 'Visor PDF',

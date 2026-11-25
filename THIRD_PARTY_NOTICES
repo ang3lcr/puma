@@ -11,6 +11,7 @@ Nombre                         Versión       Licencia
 React                          19.3.1        MIT
 React DOM                      19.3.1        MIT
 PDF.js (pdfjs-dist)            6.5.438       Apache-2.0
+pdf-lib                        1.17.1        MIT
 TypeScript                     6.0.3         Apache-2.0
 Vite                           8.3.8         MIT
 @vitejs/plugin-react           6.3.0         MIT
@@ -32,8 +33,6 @@ eslint-plugin-react-refresh    0.5.8         MIT
 @types/react-dom               19.3.0        MIT
 
 Paquetes usados solo en spikes de Etapa 0, no instalados en la app:
-
-pdf-lib                        1.17.1        MIT (Etapa 0 spike)
 
 @techstark/opencv-js           5.0.0-release.1 Apache-2.0
 tesseract.js                   7.0.0           Apache-2.0
@@ -67,5 +66,7 @@ Notas:
   alternativa PDF/WASM diferente.
 - PDF.js 6.5.438 pasó de dependencia de spike a dependencia directa de
   producción en Etapa 2. Su licencia está en `node_modules/pdfjs-dist/LICENSE`.
+- pdf-lib 1.17.1 pasó de spike a dependencia directa de producción en Etapa 13.
+  Su licencia está en `node_modules/pdf-lib/LICENSE.md`.
 - La versión efectiva de cada paquete activo queda fijada por el lockfile.
   Revisar licencias transitivas nuevamente al agregar dependencias PDF/OCR.
