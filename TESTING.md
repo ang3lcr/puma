@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–13 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones funcionales de las Etapas 1–15 ejecutadas. Las mediciones de rendimiento y memoria en Chrome/Edge nativos y hardware de referencia siguen pendientes.
 
 ## Entorno de referencia
 
@@ -242,3 +242,20 @@ Ejecución en Windows 10.0.26200.0, Node 24.19.0 y npm 11.17.0. Playwright 1.65.
 Fixtures y métodos: PDFs pequeños deterministas de 1,000 páginas, CropBox, orientación, contraseña y contenido malicioso en nombre/título; la prueba de solicitudes intercepta tráfico HTTP(S) fuera del origen durante shell/importación, y la E2E inspecciona CSP de `vite preview`. El caso hostil comprueba que nombre y metadatos se muestran como texto, no crean elementos `img`/`svg`, no ejecutan el marcador XSS y no originan solicitudes externas. Las pruebas unitarias cubren cancelación, `cleanup`/`destroy` y liberación de cachés; el código revoca las URL de descarga mediante temporizador, pero ese temporizador no se midió.
 
 La ejecución prueba regresión funcional, no es una auditoría formal de seguridad. No se midieron pico de memoria, RSS/heap/WASM, Long Tasks, latencia de importación/miniaturas ni el corpus etiquetado de clasificación/orientación. El E2E de 1,000 páginas verifica virtualización y render visible, no el umbral de 1.5 GiB. Esas métricas siguen **pendientes/no verificadas** hasta disponer de herramientas, corpus y hardware compatibles. La primera ejecución de la nueva prueba hostil falló por un selector ambiguo (`.metadata-row`); se acotó al renglón de título y la repetición pasó. Playwright siguió mostrando `NO_COLOR` ignorada por `FORCE_COLOR`.
+
+## Validación final de Etapa 16
+
+Se revisó consistencia entre README, roadmap, arquitectura, estrategia de pruebas, ADR 0001 y avisos de terceros. No hubo dependencias nuevas; se actualizaron los avisos para reflejarlo. La guía de Windows usa `npm.cmd`/`npx.cmd` porque este PowerShell bloquea `npm.ps1` por la directiva de ejecución. Se documentaron instalación con lockfile, scripts, uso local, recuperación/re-vinculación, exportación y errores, límites de preservación, privacidad/CSP, licencias, navegadores comprobados y pendientes, compilación y publicación estática.
+
+Validación final desde el checkout Windows descrito arriba (con los `node_modules` existentes; no se volvió a instalar dependencias):
+
+| Comando | Resultado |
+|---|---|
+| `npm.cmd --prefix C:\Users\ang3l\Documents\projects\puma run typecheck` | Correcto |
+| `npm.cmd --prefix C:\Users\ang3l\Documents\projects\puma run lint` | Correcto |
+| `npm.cmd --prefix C:\Users\ang3l\Documents\projects\puma run test` | 13 archivos, 73 pruebas aprobadas |
+| `npm.cmd --prefix C:\Users\ang3l\Documents\projects\puma run build` | Correcto; Vite 8.3.8, 221 módulos transformados |
+| `npm.cmd --prefix C:\Users\ang3l\Documents\projects\puma run test:e2e` | Build correcto; 14/14 E2E aprobadas con Chromium 159.0.8154.6 |
+| `git diff --check` | Correcto |
+
+El primer intento con `npm` directo no se pudo iniciar porque PowerShell bloqueó `npm.ps1`; se usó `npm.cmd` para las validaciones posteriores. `npm ci` y una publicación real no se ejecutaron; la instalación y distribución están documentadas, no declaradas como probadas. Se mantienen pendientes las mediciones nativas de Chrome/Edge y de hardware de referencia, además de las métricas indicadas en la Etapa 15.

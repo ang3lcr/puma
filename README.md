@@ -4,7 +4,7 @@ Document Studio es una aplicación de escritorio web, local y sin backend para r
 
 ## Estado
 
-**Etapas 0–14 completadas; Etapas 15–16 pendientes.** La aplicación importa PDFs locales con PDF.js, muestra miniaturas virtualizadas y un visor de página única con zoom, navegación por teclado o número, selección desde miniaturas y propiedades de página. El proyecto mantiene documentos y páginas con IDs estables y un orden global; importar, reordenar, duplicar, rotar, recortar y eliminar/restaurar páginas son operaciones reversibles con controles Deshacer/Rehacer y atajos Ctrl/Cmd+Z y Ctrl/Cmd+Shift+Z. Se sugieren giros cuando la dirección del texto digital es coherente; las páginas escaneadas o ambiguas requieren revisión. Los giros manuales, aplicar una sugerencia, rotar una selección y ajustar los márgenes de una página son acciones explícitas y reversibles. El editor convierte márgenes físicos en milímetros a una CropBox en coordenadas PDF, admite UserUnit y giros cardinales, y permite arrastrar sus cuatro guías o ajustarlas con teclado/campos numéricos. El visor sombrea el área excluida. El recorte solo puede reducir la caja visible original; no revela contenido que ya estuviera fuera de ella. El orden global del proyecto define la composición de varios PDFs: se pueden intercalar páginas de distintas fuentes sin cambiar su origen ni sus números fuente. La exportación incluye páginas activas, aplica orden/rotación/CropBox y valida con PDF.js cada archivo completo antes de descargarlo. La salida normal respeta el presupuesto heurístico de 1.5 GiB; si requiere división, informa los rangos globales y puede limitar el máximo de páginas por parte. Una página que supera el presupuesto por sí sola se rechaza. Se advierte que las firmas pierden validez y que no se garantiza conservar elementos interactivos/estructurales. El proyecto y su historial se guardan automáticamente en IndexedDB, con opción de guardado inmediato y avisos de cuota. Tras recargar, se recupera el estado pero hay que volver a seleccionar los PDFs originales; se verifican su huella y número de páginas. No se guardan bytes PDF, contraseñas ni handles de archivos. Una cola serializa los renderizados, prioriza la página visible, luego el análisis y finalmente las miniaturas. El render del visor limita el canvas a 16,777,216 píxeles y 8,192 px por lado; la caché de miniaturas se limita a 64 MiB. La detección de páginas posiblemente vacías analiza el contraste visual, no confía en texto extraído por sí solo y requiere confirmación manual; nunca elimina páginas. La orientación no está validada con un corpus etiquetado.
+**Etapas 0–16 implementadas.** La regresión disponible se ejecutó en Windows con Chromium de Playwright; las mediciones en Chrome/Edge nativos y hardware de referencia siguen pendientes. La aplicación importa PDFs locales con PDF.js, muestra miniaturas virtualizadas y un visor de página única con zoom, navegación por teclado o número, selección desde miniaturas y propiedades de página. El proyecto mantiene documentos y páginas con IDs estables y un orden global; importar, reordenar, duplicar, rotar, recortar y eliminar/restaurar páginas son operaciones reversibles con controles Deshacer/Rehacer y atajos Ctrl/Cmd+Z y Ctrl/Cmd+Shift+Z. Se sugieren giros cuando la dirección del texto digital es coherente; las páginas escaneadas o ambiguas requieren revisión. Los giros manuales, aplicar una sugerencia, rotar una selección y ajustar los márgenes de una página son acciones explícitas y reversibles. El editor convierte márgenes físicos en milímetros a una CropBox en coordenadas PDF, admite UserUnit y giros cardinales, y permite arrastrar sus cuatro guías o ajustarlas con teclado/campos numéricos. El visor sombrea el área excluida. El recorte solo puede reducir la caja visible original; no revela contenido que ya estuviera fuera de ella. El orden global del proyecto define la composición de varios PDFs: se pueden intercalar páginas de distintas fuentes sin cambiar su origen ni sus números fuente. La exportación incluye páginas activas, aplica orden/rotación/CropBox y valida con PDF.js cada archivo completo antes de descargarlo. La salida normal respeta el presupuesto heurístico de 1.5 GiB; si requiere división, informa los rangos globales y puede limitar el máximo de páginas por parte. Una página que supera el presupuesto por sí sola se rechaza. Se advierte que las firmas pierden validez y que no se garantiza conservar elementos interactivos/estructurales. El proyecto y su historial se guardan automáticamente en IndexedDB, con opción de guardado inmediato y avisos de cuota. Tras recargar, se recupera el estado pero hay que volver a seleccionar los PDFs originales; se verifican su huella y número de páginas. No se guardan bytes PDF, contraseñas ni handles de archivos. Una cola serializa los renderizados, prioriza la página visible, luego el análisis y finalmente las miniaturas. El render del visor limita el canvas a 16,777,216 píxeles y 8,192 px por lado; la caché de miniaturas se limita a 64 MiB. La detección de páginas posiblemente vacías analiza el contraste visual, no confía en texto extraído por sí solo y requiere confirmación manual; nunca elimina páginas. La orientación no está validada con un corpus etiquetado.
 
 ## Exportación por partes
 
@@ -27,29 +27,42 @@ Si una salida única supera el presupuesto heurístico, Document Studio propone 
 - Una detección de baja confianza requiere revisión. Nunca se eliminan páginas automáticamente.
 - Si no es seguro generar un único PDF grande, se informa y se ofrecen partes válidas en lugar de producir un archivo incompleto.
 
+## Privacidad y licencias
+
+La aplicación no usa backend, telemetría ni recursos de terceros. Los PDF se leen desde los archivos seleccionados en el navegador; IndexedDB conserva únicamente el proyecto y su historial local, sujetos a la cuota y evicción del navegador. La CSP de producción restringe recursos al mismo origen y deshabilita objetos y scripts inline. Revisa [THIRD_PARTY_NOTICES](./THIRD_PARTY_NOTICES) y conserva los avisos/LICENSE de las dependencias al distribuir. Estos controles describen la implementación; no constituyen una auditoría formal de seguridad.
+
 ## Desarrollo local
 
 Requiere Node.js compatible con Vite 8 (20.19+ o 22.12+).
 
 ```powershell
-npm install
-npx playwright install chromium
-npm run dev
+npm.cmd ci
+npx.cmd playwright install chromium
+npm.cmd run dev
 ```
 
 Instalar Chromium una sola vez es necesario para ejecutar la suite E2E.
 
+Se usan los ejecutables `.cmd` para que los comandos funcionen en PowerShell aunque la directiva local bloquee scripts `npm.ps1`/`npx.ps1`.
+
 Scripts de validación:
 
 ```powershell
-npm run typecheck
-npm run lint
-npm run test
-npm run build
-npm run test:e2e
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd run test
+npm.cmd run build
+npm.cmd run test:e2e
+npm.cmd run test:watch
 ```
 
 La suite E2E usa Playwright Chromium y prueba el build de producción mediante `vite preview`. Para un hosting estático, `public/_headers` define las cabeceras CSP y de seguridad en proveedores que soportan ese formato; en otros hostings hay que configurar las mismas cabeceras HTTP. El servidor de desarrollo permite recursos inline/blob solo para React Fast Refresh y HMR de Vite; preview y producción no permiten `unsafe-inline` ni Workers `blob:`.
+
+## Distribuir
+
+En Windows, con Node.js 20.19+ (o 22.12+) y npm, ejecuta `npm.cmd ci` y `npm.cmd run build`. Publica el contenido de `dist/` en un hosting estático que sirva la aplicación y sus assets desde el mismo origen. Configura en el servidor las cabeceras definidas en `public/_headers` si el proveedor no las aplica automáticamente. Comprueba la compilación con `npm.cmd run preview`; no uses el servidor de desarrollo para distribución.
+
+Al redistribuir, incluye [THIRD_PARTY_NOTICES](./THIRD_PARTY_NOTICES) y conserva los archivos LICENSE/NOTICE de las dependencias incluidas. Los avisos enumeran las licencias revisadas y no constituyen una auditoría legal. El soporte objetivo de producto es Chrome y Edge de escritorio en sus dos últimas versiones estables; este objetivo todavía no está validado en instalaciones nativas. La única regresión de navegador ejecutada aquí fue Chromium 159.0.8154.6 distribuido por Playwright 1.65.1 en Windows 10.0.26200.0. No se verificaron otras plataformas.
 
 ## Importación local
 
@@ -59,4 +72,4 @@ El historial en memoria conserva referencias a los objetos `File` y deltas peque
 
 ## Alcance de las etapas
 
-El diseño y las decisiones de la Etapa 0 fueron aprobados. Se conservan el objetivo de prueba de 4 núcleos/8 GiB y los umbrales de [TESTING.md](./TESTING.md), que todavía deben validarse en Chrome/Edge cuando ese hardware/navegador esté disponible. Las Etapas 1–14 entregaron shell, importación local, miniaturas virtualizadas, visor accesible, cola de render PDF, modelo/historial, operaciones de páginas, detección conservadora, sugerencias de orientación, editor explícito de CropBox, persistencia local y exportación normal y por partes. Las pruebas de estrés y las guías de distribución se documentan en TESTING.md y README.md; las mediciones de hardware/browser de referencia siguen pendientes.
+El diseño y las decisiones de la Etapa 0 fueron aprobados. Se conservan el objetivo de prueba de 4 núcleos/8 GiB y los umbrales de [TESTING.md](./TESTING.md), que todavía deben validarse en Chrome/Edge cuando ese hardware/navegador esté disponible. Las Etapas 1–16 entregaron shell, importación local, miniaturas virtualizadas, visor accesible, cola de render PDF, modelo/historial, operaciones de páginas, detección conservadora, sugerencias de orientación, editor explícito de CropBox, persistencia local, exportación normal y por partes, pruebas funcionales de regresión y guías finales. Las métricas de hardware/navegadores de referencia siguen pendientes según TESTING.md.

@@ -1,7 +1,7 @@
 Document Studio — avisos de terceros
 Fecha de revisión: 2026-11-25
 
-Las dependencias activas de Etapas 1–3 se fijan en package-lock.json. Los archivos
+Las dependencias activas se fijan en package-lock.json. No se agregaron dependencias en Etapas 14–16. Los archivos
 de licencia/NOTICE de cada paquete deben conservarse al distribuir. La lista
 incluye también transitivas relevantes revisadas; no es una auditoría legal.
 

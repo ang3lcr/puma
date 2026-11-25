@@ -1,6 +1,6 @@
 # Arquitectura propuesta
 
-**Estado:** arquitectura base aprobada en Etapa 0; Etapas 1–14 implementadas. La medición de memoria en Chrome/Edge nativos y hardware de referencia sigue pendiente.
+**Estado:** arquitectura base aprobada en Etapa 0; Etapas 1–16 implementadas. La medición de memoria en Chrome/Edge nativos y hardware de referencia sigue pendiente.
 
 ## Alcance técnico
 
