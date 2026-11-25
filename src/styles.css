@@ -97,6 +97,8 @@ main:focus-visible {
 
 .brand,
 .topbar-actions,
+.history-controls,
+.history-control,
 .local-indicator,
 .theme-toggle,
 .status-ready,
@@ -147,6 +149,32 @@ main:focus-visible {
 
 .topbar-actions {
   gap: 18px;
+}
+
+.history-controls {
+  gap: 5px;
+}
+
+.history-control {
+  min-height: 34px;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.history-control:hover:not(:disabled) {
+  border-color: var(--text-subtle);
+  color: var(--text);
+}
+
+.history-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .local-indicator {
@@ -1051,8 +1079,15 @@ main:focus-visible {
 
   .session-badge,
   .local-indicator,
-  .theme-toggle > span:last-child {
+  .theme-toggle > span:last-child,
+  .history-control > span:last-child {
     display: none;
+  }
+
+  .history-control {
+    width: 34px;
+    justify-content: center;
+    padding: 0;
   }
 
   .theme-toggle {

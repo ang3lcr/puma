@@ -1,5 +1,15 @@
 # Changelog
 
+## Etapa 6 — 2026-11-25
+
+- Añadido un modelo normalizado de proyecto con IDs estables para documentos y páginas, orden de documentos y orden global de páginas.
+- La importación registra documento y páginas como un comando delta reversible; el historial guarda referencias `File` y metadatos/IDs, nunca duplica bytes PDF.
+- Añadidos controles y atajos Deshacer/Rehacer; al deshacer la importación activa se libera su sesión PDF, y al rehacer el documento vuelve a la lista para abrirse bajo demanda.
+- La selección temporal no crea comandos; una acción nueva después de undo descarta la rama de redo.
+- Validación: typecheck y lint correctos; 6 archivos de pruebas unitarias/componentes, 17 pruebas aprobadas; build correcto; 4 E2E aprobadas, incluidas undo/redo por controles y teclado, importación local, render PDF y ausencia de tráfico externo.
+- Bundle de producción: shell JS 291.57 kB / 89.61 kB gzip; CSS 15.61 kB / 3.78 kB gzip; módulo PDF.js diferido 447.46 kB / 134.94 kB gzip; Worker local 1,271.91 kB. Las métricas nativas de memoria/rendimiento de Chrome/Edge siguen pendientes.
+- Pendiente la aprobación de Etapa 6 antes de comenzar la Etapa 7.
+
 ## Etapa 5 — 2026-11-25
 
 - Añadida `PageRenderQueue`, con una tarea PDF de canvas a la vez, FIFO por prioridad, prioridad de página visible y cancelación de trabajos en espera o activos.
@@ -8,7 +18,7 @@
 - Añadidas pruebas de prioridad, orden, estados, cancelación, errores y destrucción de la cola.
 - Validación: typecheck y lint correctos; 5 archivos de pruebas unitarias/componentes, 15 pruebas aprobadas; build correcto; 4 E2E aprobadas, incluidas renderización real, navegación, miniaturas virtualizadas y cero tráfico externo.
 - Bundle de producción: shell JS 286.81 kB / 88.25 kB gzip; CSS 15.14 kB / 3.73 kB gzip; módulo PDF.js diferido 447.46 kB / 134.94 kB gzip; Worker local 1,271.91 kB. Las métricas nativas de memoria/rendimiento de Chrome/Edge siguen pendientes.
-- Pendiente la aprobación de Etapa 5 antes de comenzar la Etapa 6.
+- Etapa 5 aprobada antes de comenzar la Etapa 6.
 
 ## Etapa 4 — 2026-11-25
 

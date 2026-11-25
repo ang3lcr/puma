@@ -1,6 +1,6 @@
 # Arquitectura propuesta
 
-**Estado:** arquitectura base aprobada en Etapa 0; etapas 1–5 implementadas y aprobadas o en revisión. Edición, persistencia de proyecto y exportación siguen pendientes de sus etapas.
+**Estado:** arquitectura base aprobada en Etapa 0; etapas 1–5 aprobadas y Etapa 6 implementada, pendiente de aprobación. Edición de páginas, persistencia de proyecto y exportación siguen pendientes de sus etapas.
 
 ## Alcance técnico
 
@@ -54,9 +54,9 @@ La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniat
 ## Modelo de dominio
 
 - **Documento:** ID estable, nombre tratado como texto no confiable, tamaño, fecha de modificación, cantidad de páginas, metadatos filtrados, indicadores de cifrado/firmas/formularios y referencia reabrible a la fuente.
-- **Página:** ID estable propio, documento y número de origen, rotación nativa, rotación solicitada por el usuario, MediaBox/CropBox/UserUnit, dimensiones, márgenes, tipo de contenido, análisis con confianza, estado de eliminación y estado de modificación. Una duplicación crea un nuevo ID y conserva el vínculo con su página de origen.
-- **Proyecto:** orden y estado lógico, configuraciones, selección y revisión. No contiene copias del PDF en el historial.
-- **Comando:** delta reversible con `apply`/`undo`; una operación masiva ocupa una entrada de historial. Selección y vista temporal no crean comandos.
+- **Página:** ID estable propio, documento y número de origen, rotación nativa, rotación solicitada por el usuario, MediaBox/CropBox/UserUnit, dimensiones, márgenes, tipo de contenido, análisis con confianza, estado de eliminación y estado de modificación. El modelo actual crea IDs estables por página y conserva un delta de rotación inicial de 0°; los demás datos se incorporarán en sus etapas. Una duplicación crea un nuevo ID y conserva el vínculo con su página de origen.
+- **Proyecto:** ID estable, documentos y páginas normalizados por ID, orden de documentos y orden global de páginas. La selección temporal permanece fuera del historial. Los documentos conservan una referencia al `File`; los comandos no copian sus bytes.
+- **Comando:** delta reversible `forward`/`inverse`; importar un documento añade sus registros y páginas en una entrada de historial. Undo/redo mueve el comando entre pilas y una nueva acción descarta la rama de redo.
 
 ## Flujo de datos
 
@@ -64,14 +64,14 @@ La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniat
 2. Renderizar miniaturas únicamente para las páginas próximas al viewport y renderizar en el visor solo la página seleccionada. La cola serializa las tareas de canvas y prioriza la página seleccionada. Texto digital se conserva como texto; imágenes y páginas mixtas no se rasterizan para analizarlas.
 3. Procesar imágenes de resolución reducida en Worker con un límite de concurrencia, cancelación, prioridades y mensajes tipados. Transferir buffers cuando sea seguro para evitar copias.
 4. Registrar sugerencias de análisis sin modificar el contenido. Ante baja confianza, marcar «Requiere revisión».
-5. Aplicar acciones del usuario al modelo mediante comandos reversibles.
+5. Registrar cada importación como una orden reversible del proyecto. Ctrl/Cmd+Z deshace, Ctrl/Cmd+Shift+Z o Ctrl/Cmd+Y rehace; los campos editables conservan sus atajos nativos. Las operaciones de página se añadirán mediante deltas en las etapas siguientes.
 6. Estimar memoria antes de exportar. Crear el PDF completo en memoria con pdf-lib solo dentro del presupuesto; validar el buffer reabriéndolo con PDF.js y contar páginas antes de escribirlo a destino. Usar escritura temporal/atómica si la API disponible la admite. Si el presupuesto no alcanza, ofrecer archivos de salida por rangos o rechazar la exportación individual con un mensaje claro.
 
 ## Seguridad, privacidad y compatibilidad
 
 - CSP estricta servida también como cabecera HTTP: recursos solo del mismo origen, sin CDN, telemetría, `eval` o `object-src`; permitir únicamente los esquemas locales imprescindibles para PDF/Workers después de validarlos. La política de desarrollo permite scripts/estilos inline y Workers `blob:` solo para React Fast Refresh/HMR de Vite; preview y hosting de producción no permiten `unsafe-inline` ni `blob:` para Workers. Usar rutas locales de Worker.
 - La versión integrada de PDF.js no expone `isEvalSupported` en su API. Se usa sin el Viewer ni el gestor de scripting; la comprobación del bundle fijado no encontró llamadas a `eval()` ni `new Function()`. No se ejecutan acciones ni JavaScript del PDF.
-- La importación retiene el `File` durante la sesión, sin copiar el archivo a IndexedDB. La etapa activa conserva su `PDFDocumentLoadingTask` para miniaturas y lo destruye al cambiar de documento o desmontar la aplicación. Las miniaturas se limitan a una caché de 64 MiB y el renderizado se cancela al salir de la ventana virtual; `page.cleanup()` se ejecuta después de finalizar cada tarea. La fuente se debe volver a seleccionar tras recargar; la persistencia de handles se implementará con el almacenamiento del proyecto.
+- La importación retiene el `File` durante la sesión, sin copiar el archivo a IndexedDB. El modelo/historial mantiene referencias al `File`, no copias de bytes. La etapa activa conserva su `PDFDocumentLoadingTask` para miniaturas y lo destruye al cambiar de documento o desmontar la aplicación. Las miniaturas se limitan a una caché de 64 MiB y el renderizado se cancela al salir de la ventana virtual; `page.cleanup()` se ejecuta después de finalizar cada tarea. La fuente se debe volver a seleccionar tras recargar; la persistencia de handles se implementará con el almacenamiento del proyecto.
 - Escapar nombres, metadatos y mensajes procedentes de PDF. No insertar HTML proporcionado por documentos.
 - La File System Access API es específica de Chromium. Si no está disponible, pedir que se vuelva a seleccionar la fuente después de recargar. OPFS e IndexedDB están sujetos a cuota y evicción; consultar `navigator.storage.estimate()` y manejar errores explícitamente.
 - Las firmas digitales dejan de ser válidas tras modificar o combinar el PDF. Formularios, anotaciones, marcadores, capas, adjuntos, etiquetas y restricciones de permisos se evalúan y documentan antes de exportar; no prometer preservación no comprobada.

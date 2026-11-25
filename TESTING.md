@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–5 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–6 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
 
 ## Entorno de referencia
 
@@ -106,3 +106,17 @@ Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 
 | `npm run test:e2e` | 4 E2E aprobadas: CSP/shell, importación local/reapertura, visor/zoom/navegación, virtualización de 1.000 páginas y contraseña/cancelación |
 
 Las E2E confirman que el visor y las miniaturas conectados a la cola completan renders reales y mantienen la navegación/virtualización. Las pruebas unitarias verifican prioridad de página visible sobre miniaturas en espera, cancelación y liberación al destruir la cola. Esta suite no mide latencia, memoria máxima ni cancelación bajo estrés; las pruebas nativas en Chrome/Edge y el hardware de referencia siguen pendientes.
+
+## Validación de Etapa 6
+
+Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 1.65.1 y Chromium 159.0.8154.6:
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm run test` | 6 archivos, 17 pruebas aprobadas; incluye importación/undo/redo, ramas de historial, IDs de página y liberación tras cancelación |
+| `npm run build` | Correcto; shell JS 291.57 kB / 89.61 kB gzip, CSS 15.61 kB / 3.78 kB gzip, módulo PDF.js diferido 447.46 kB / 134.94 kB gzip y Worker local 1,271.91 kB |
+| `npm run test:e2e` | 4 E2E aprobadas; incluye importación deshecha/rehacida por botones y atajos de teclado, junto con CSP, PDF local y virtualización |
+
+El historial no clona bytes de `File`; los comandos retienen la misma referencia y deltas de IDs/metadatos. La prueba E2E verifica también deshacer/rehacer mientras se importan y reabren documentos. La persistencia del proyecto y la edición de páginas quedan fuera de esta etapa.

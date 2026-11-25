@@ -117,6 +117,9 @@ test('imports PDF metadata locally and reports invalid PDF files', async ({
     name: 'Número de página',
   });
   await pageNumberInput.fill('2');
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('.document-list-item')).toHaveCount(1);
+  await pageNumberInput.fill('2');
   await page.getByRole('button', { name: 'Ir', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText(
     'Escribe un número de página entre 1 y 1.',
@@ -164,6 +167,15 @@ test('imports PDF metadata locally and reports invalid PDF files', async ({
     buffer: createMinimalPdf(),
   });
   await expect(page.locator('.document-properties')).toContainText('second.pdf');
+  await page.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(page.locator('.document-list-item')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Rehacer' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Rehacer' }).click();
+  await expect(page.locator('.document-list-item')).toHaveCount(2);
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('.document-list-item')).toHaveCount(1);
+  await page.keyboard.press('Control+Shift+z');
+  await expect(page.locator('.document-list-item')).toHaveCount(2);
   await page.locator('.document-list-item').first().click();
   await expect(page.locator('.document-properties')).toContainText('local.pdf');
   await expect(page.locator('canvas[aria-label="Página 1"]')).toBeVisible();

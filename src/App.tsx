@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { DragEvent, FormEvent, KeyboardEvent } from 'react';
 import {
   PdfImportError,
   sanitizeText,
 } from './features/documents/pdf-import-error';
 import {
-  type ImportedPdf,
   type PdfDocumentSession,
   type PasswordReason,
   type PdfImportProgress,
@@ -17,9 +16,14 @@ import { ByteLruCache } from './features/pages/thumbnail-cache';
 import { es } from './i18n/es';
 import { formatBytes, formatNumber } from './i18n/format';
 import { PageRenderQueue } from './pdf/page-render-queue';
+import {
+  createProjectHistoryState,
+  getOrderedProjectDocuments,
+  projectHistoryReducer,
+  type ProjectDocument,
+} from './store/project-store';
 
 type Theme = 'dark' | 'light';
-type DocumentRecord = Omit<ImportedPdf, 'session'>;
 
 interface ImportFailure {
   fileName: string;
@@ -49,7 +53,12 @@ interface ActivePdfSession {
 
 function App() {
   const [theme, setTheme] = useState<Theme>('dark');
-  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [projectHistory, dispatchProject] = useReducer(
+    projectHistoryReducer,
+    undefined,
+    createProjectHistoryState,
+  );
+  const documents = getOrderedProjectDocuments(projectHistory.project);
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [activePageNumber, setActivePageNumber] = useState(1);
   const [activePageInfo, setActivePageInfo] = useState<
@@ -111,6 +120,67 @@ function App() {
     },
     [activeDocumentId],
   );
+
+  const undoProjectChange = useCallback((): void => {
+    const command = projectHistory.undoStack.at(-1);
+    if (!command) {
+      return;
+    }
+
+    const removesActiveDocument =
+      activeDocumentId !== null &&
+      command.inverse.some(
+        (operation) =>
+          operation.type === 'remove-document' &&
+          operation.documentId === activeDocumentId,
+      );
+    if (removesActiveDocument) {
+      setActiveDocumentId(null);
+      setActivePageNumber(1);
+      setActivePageInfo(null);
+      setActivePdfSession(null);
+    }
+    dispatchProject({ type: 'undo' });
+  }, [activeDocumentId, dispatchProject, projectHistory.undoStack]);
+
+  const redoProjectChange = useCallback((): void => {
+    dispatchProject({ type: 'redo' });
+  }, [dispatchProject]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent): void => {
+      if ((!event.ctrlKey && !event.metaKey) || event.altKey) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest(
+            'input:not([type="file"]), textarea, select, [contenteditable="true"]',
+          ))
+      ) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          redoProjectChange();
+        } else {
+          undoProjectChange();
+        }
+      } else if (key === 'y' && !event.shiftKey) {
+        event.preventDefault();
+        redoProjectChange();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [redoProjectChange, undoProjectChange]);
 
   useEffect(() => {
     if (passwordRequest) {
@@ -211,10 +281,7 @@ function App() {
         });
 
         const { session, ...documentRecord } = imported;
-        setDocuments((currentDocuments) => [
-          ...currentDocuments,
-          documentRecord,
-        ]);
+        dispatchProject({ type: 'import-document', document: documentRecord });
         setActiveDocumentId(documentRecord.id);
         setActivePageNumber(1);
         setActivePdfSession({ documentId: documentRecord.id, session });
@@ -232,7 +299,7 @@ function App() {
     setProgress(null);
   }
 
-  async function selectDocument(document: DocumentRecord): Promise<void> {
+  async function selectDocument(document: ProjectDocument): Promise<void> {
     if (
       isLoadingDocument ||
       importRunning.current ||
@@ -454,6 +521,34 @@ function App() {
         </div>
 
         <div className="topbar-actions">
+          <div
+            className="history-controls"
+            role="group"
+            aria-label={es.history.groupLabel}
+          >
+            <button
+              className="history-control"
+              type="button"
+              aria-label={es.history.undo}
+              title={es.history.undo}
+              disabled={projectHistory.undoStack.length === 0}
+              onClick={undoProjectChange}
+            >
+              <span aria-hidden="true">↶</span>
+              <span>{es.history.undo}</span>
+            </button>
+            <button
+              className="history-control"
+              type="button"
+              aria-label={es.history.redo}
+              title={es.history.redo}
+              disabled={projectHistory.redoStack.length === 0}
+              onClick={redoProjectChange}
+            >
+              <span aria-hidden="true">↷</span>
+              <span>{es.history.redo}</span>
+            </button>
+          </div>
           <span className="local-indicator">
             <span className="status-dot" aria-hidden="true" />
             {es.header.localProcessing}

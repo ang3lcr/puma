@@ -13,6 +13,11 @@ export const es = {
     lightTheme: 'Tema claro',
     darkTheme: 'Tema oscuro',
   },
+  history: {
+    groupLabel: 'Historial del proyecto',
+    undo: 'Deshacer',
+    redo: 'Rehacer',
+  },
   documents: {
     heading: 'Documentos',
     countLabel: 'documentos',
