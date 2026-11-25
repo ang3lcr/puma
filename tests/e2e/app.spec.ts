@@ -513,6 +513,9 @@ test('splits ordered pages into independently validated downloads', async ({ pag
     { name: 'source-b.pdf', mimeType: 'application/pdf', buffer: createCropBoxPdf() },
   ]);
   await expect(page.locator('.statusbar')).toContainText('3 páginas');
+  await page.getByRole('button', { name: 'Seleccionar página 1' }).click();
+  await page.getByRole('button', { name: 'Girar página 90° a la derecha' }).click();
+  await expect(page.locator('.page-properties')).toContainText('90°');
   await page.getByRole('spinbutton', { name: 'Máximo de páginas por parte' }).fill('1');
   const plan = page.locator('.export-part-plan');
   await expect(plan).toContainText('Se crearán 3 partes');
@@ -537,6 +540,7 @@ test('splits ordered pages into independently validated downloads', async ({ pag
     expect(pdf.getPageCount()).toBe(1);
     output.push(pdf.getPage(0));
   }
+  expect(output.map((part) => part?.getRotation().angle)).toContain(90);
   expect(output[2]?.getCropBox()).toMatchObject({ x: 36, y: 36, width: 540, height: 720 });
   expect(pageErrors).toEqual([]);
 });

@@ -218,12 +218,12 @@ Ejecución local en Windows 10.0.26200.0 con Node 24.19.0, npm 11.17.0, Playwrig
 | `npm run lint` | Correcto, sin infracciones |
 | `npm run test` | 13 archivos, 73 pruebas aprobadas; incluye planificación por presupuesto/máximo de páginas, orden y exclusión de eliminadas, imposibilidad de una página individual, geometría CropBox/rotación, cancelación, error parcial y reintento desde la siguiente parte |
 | `npm run build` | Correcto; Vite 8.3.8, exportación diferida 423.52 kB / 176.99 kB gzip |
-| `npm run test:e2e` | Build correcto; 13 E2E aprobadas. La prueba de partes descarga 3 PDFs contiguos y reabre cada uno con pdf-lib; el flujo de producción valida cada salida completa con PDF.js antes de descargarla y se comprobó CropBox en la tercera parte |
+| `npm run test:e2e` | Build correcto; 13 E2E aprobadas. La prueba de partes descarga 3 PDFs contiguos, reabre cada uno con pdf-lib, comprueba CropBox y localiza la rotación aplicada en la parte correspondiente; el flujo de producción valida cada salida completa con PDF.js antes de descargarla |
 | `git diff --check` | Correcto |
 
 La prueba unitaria sustituye el adaptador de apertura PDF.js por un lector simulado, porque en Vitest el `?url` del worker se resolvió como `C:\node_modules\pdfjs-dist`. La E2E ejecuta el build real y verifica la validación de cada archivo mediante PDF.js en Chromium; pdf-lib vuelve a abrir los archivos descargados en la prueba para comprobar cantidad y CropBox. Se probaron cancelación, error y reintento con fixtures pequeños, sin construir PDFs grandes. El presupuesto de 1.5 GiB y la estimación son heurísticos, no una medición ni una garantía de memoria. Chrome/Edge nativos y el equipo de referencia no están disponibles en este entorno; las métricas de hardware siguen pendientes.
 
-La primera ejecución completa de E2E tuvo 12 aprobadas y 1 fallo porque el texto esperado en la prueba de composición quedó obsoleto tras actualizar el aviso; se corrigió la expectativa y la repetición terminó con 13/13 aprobadas. Playwright mostró la advertencia de entorno `NO_COLOR` ignorada por `FORCE_COLOR`; no afectó los resultados.
+La primera ejecución completa de E2E tuvo 12 aprobadas y 1 fallo porque el texto esperado en la prueba de composición quedó obsoleto tras actualizar el aviso; se corrigió la expectativa y la repetición terminó con 13/13 aprobadas. La primera variante de la aserción de giro asumía que la página girada estaría en la primera descarga; se comprobó en cambio la rotación entre las tres salidas, que pasó en la parte correspondiente. Playwright mostró la advertencia de entorno `NO_COLOR` ignorada por `FORCE_COLOR`; no afectó los resultados.
 
 ## Validación de Etapa 15
 
