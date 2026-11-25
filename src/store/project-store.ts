@@ -3,6 +3,7 @@ import type {
   BlankPageAnalysis,
   BlankPageReviewDecision,
 } from '../features/blank-detection/types';
+import type { OrientationAnalysis } from '../features/orientation/types';
 
 export type ProjectDocument = Omit<ImportedPdf, 'session'>;
 
@@ -15,6 +16,7 @@ export interface ProjectPage {
   readonly isDeleted: boolean;
   readonly blankAnalysis: BlankPageAnalysis | null;
   readonly blankReviewDecision: BlankPageReviewDecision | null;
+  readonly orientationAnalysis: OrientationAnalysis | null;
 }
 
 export interface Project {
@@ -86,6 +88,11 @@ export type ProjectHistoryAction =
       pageId: string;
       analysis: BlankPageAnalysis;
     }
+  | {
+      type: 'record-page-orientation-analysis';
+      pageId: string;
+      analysis: OrientationAnalysis;
+    }
   | { type: 'undo' }
   | { type: 'redo' };
 
@@ -154,6 +161,7 @@ export function createDocumentImportCommand(
     isDeleted: false,
     blankAnalysis: null,
     blankReviewDecision: null,
+    orientationAnalysis: null,
   }));
   const documentIndex = project.documentOrder.length;
   const firstPageIndex = project.pageOrder.length;
@@ -445,21 +453,63 @@ export function createRestorePageCommand(
 export function createRotatePageCommand(
   project: Project,
   pageId: string,
+  degrees: 90 | 180 | 270 = 90,
 ): ProjectCommand {
   const page = requireActivePage(project, pageId);
-  const rotationDeltaDegrees = (page.rotationDeltaDegrees + 90) % 360;
+  const rotationDeltaDegrees =
+    (page.rotationDeltaDegrees + degrees) % 360;
+  return createSetPageRotationsCommand(
+    project,
+    [{ pageId, rotationDeltaDegrees }],
+    'Girar página',
+  );
+}
+
+export interface PageRotationChange {
+  readonly pageId: string;
+  readonly rotationDeltaDegrees: number;
+}
+
+export function createSetPageRotationsCommand(
+  project: Project,
+  changes: readonly PageRotationChange[],
+  label = 'Girar páginas',
+): ProjectCommand {
+  const seenPageIds = new Set<string>();
+  const forward: ProjectOperation[] = [];
+  const inverse: ProjectOperation[] = [];
+
+  for (const change of changes) {
+    if (seenPageIds.has(change.pageId)) {
+      throw new Error(`Page "${change.pageId}" has multiple rotation changes.`);
+    }
+    seenPageIds.add(change.pageId);
+
+    const page = requireActivePage(project, change.pageId);
+    assertRotation(change.rotationDeltaDegrees);
+    if (page.rotationDeltaDegrees === change.rotationDeltaDegrees) {
+      continue;
+    }
+    forward.push({
+      type: 'set-page-rotation',
+      pageId: change.pageId,
+      rotationDeltaDegrees: change.rotationDeltaDegrees,
+    });
+    inverse.unshift({
+      type: 'set-page-rotation',
+      pageId: change.pageId,
+      rotationDeltaDegrees: page.rotationDeltaDegrees,
+    });
+  }
+
+  if (forward.length === 0) {
+    return emptyCommand(label);
+  }
+
   return {
-    label: 'Girar página',
-    forward: [
-      { type: 'set-page-rotation', pageId, rotationDeltaDegrees },
-    ],
-    inverse: [
-      {
-        type: 'set-page-rotation',
-        pageId,
-        rotationDeltaDegrees: page.rotationDeltaDegrees,
-      },
-    ],
+    label,
+    forward,
+    inverse,
   };
 }
 
@@ -509,6 +559,21 @@ export function projectHistoryReducer(
       pages.set(page.id, {
         ...page,
         blankAnalysis: action.analysis,
+      });
+      return {
+        ...state,
+        project: { ...state.project, pages },
+      };
+    }
+    case 'record-page-orientation-analysis': {
+      const page = state.project.pages.get(action.pageId);
+      if (!page) {
+        throw new Error(`Page "${action.pageId}" is not in the project.`);
+      }
+      const pages = new Map(state.project.pages);
+      pages.set(page.id, {
+        ...page,
+        orientationAnalysis: action.analysis,
       });
       return {
         ...state,

@@ -3,6 +3,7 @@ import { createMinimalPdf } from '../fixtures/minimal-pdf';
 import { createManyPagesPdf } from '../fixtures/many-pages-pdf';
 import { createPasswordProtectedPdf } from '../fixtures/password-protected-pdf';
 import { createBlankAndTextPdf } from '../fixtures/blank-and-text-pdf';
+import { createOrientationPdf } from '../fixtures/orientation-pdf';
 
 test('initial workspace is usable and makes no external network requests', async ({
   page,
@@ -264,6 +265,100 @@ test('analyzes blank-page candidates and requires explicit review', async ({
   await page.getByRole('button', { name: 'Seleccionar página 2' }).click();
   await expect(review).toContainText('Se detectó contenido');
   await expect(review).toContainText('Se encontró texto en la página.');
+  expect(pageErrors).toEqual([]);
+});
+
+test('suggests digital-text orientation and applies manual and batch corrections', async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.goto('/');
+  await page.getByLabel('Seleccionar PDF').setInputFiles({
+    name: 'orientation.pdf',
+    mimeType: 'application/pdf',
+    buffer: createOrientationPdf(),
+  });
+  await page.getByRole('button', { name: 'Analizar orientación' }).click();
+  await expect(page.locator('.orientation-scan-status')).toContainText(
+    'Análisis terminado; revisa las sugerencias.',
+  );
+  await expect(page.locator('.statusbar')).toContainText('6 páginas');
+
+  const orientationReview = page.getByRole('region', {
+    name: 'Análisis de orientación',
+  });
+  await expect(orientationReview).toContainText(
+    'La orientación del texto está alineada.',
+  );
+  await page.getByRole('button', { name: 'Seleccionar página 2' }).click();
+  await expect(orientationReview).toContainText(
+    'Giro sugerido: 90° a la derecha.',
+  );
+  await page.getByRole('button', { name: 'Aplicar sugerencia de giro' }).click();
+  await expect(orientationReview).toContainText(
+    'La orientación sugerida ya está aplicada.',
+  );
+  await expect(page.locator('.page-properties')).toContainText('90°');
+  await page.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(page.locator('.page-properties')).toContainText('0°');
+
+  await page
+    .getByRole('checkbox', {
+      name: 'Seleccionar página para corrección masiva 2',
+    })
+    .check();
+  await page
+    .getByRole('checkbox', {
+      name: 'Seleccionar página para corrección masiva 3',
+    })
+    .check();
+  await page.getByRole('button', { name: 'Girar selección 90° a la derecha' }).click();
+  await expect(page.locator('.page-properties')).toContainText('90°');
+  await page.getByRole('button', { name: 'Seleccionar página 3' }).click();
+  await expect(orientationReview).toContainText(
+    'Giro sugerido: 90° a la derecha.',
+  );
+  await expect(page.locator('.page-properties')).toContainText('90°');
+  await page.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(page.locator('.page-properties')).toContainText('0°');
+  await page.getByRole('button', { name: 'Rehacer' }).click();
+  await expect(page.locator('.page-properties')).toContainText('90°');
+
+  await page.getByRole('button', { name: 'Seleccionar página 5' }).click();
+  await expect(orientationReview).toContainText(
+    'Giro sugerido: 90° a la izquierda.',
+  );
+  await expect(page.locator('.page-properties')).toContainText('90°');
+  await page.getByRole('button', { name: 'Aplicar sugerencias pendientes (3)' }).click();
+  await page.getByRole('button', { name: 'Seleccionar página 3' }).click();
+  await expect(orientationReview).toContainText(
+    'La orientación sugerida ya está aplicada.',
+  );
+  await expect(page.locator('.page-properties')).toContainText('180°');
+  await page.getByRole('button', { name: 'Seleccionar página 4' }).click();
+  await expect(page.locator('.page-properties')).toContainText('270°');
+  await page.getByRole('button', { name: 'Seleccionar página 5' }).click();
+  await expect(orientationReview).toContainText(
+    'La orientación sugerida ya está aplicada.',
+  );
+  await expect(page.locator('.page-properties')).toContainText('0°');
+  await page.getByRole('button', { name: 'Seleccionar página 6' }).click();
+  await expect(orientationReview).toContainText('No hay texto digital;');
+  await page
+    .getByRole('button', { name: 'Girar página 90° a la izquierda' })
+    .click();
+  await expect(page.locator('.page-properties')).toContainText('270°');
+  await page.getByRole('button', { name: 'Girar página 180°' }).click();
+  await expect(page.locator('.page-properties')).toContainText('90°');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    ),
+  ).toBe(false);
   expect(pageErrors).toEqual([]);
 });
 

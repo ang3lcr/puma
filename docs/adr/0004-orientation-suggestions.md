@@ -1,6 +1,6 @@
 # ADR 0004 — Sugerencias de orientación
 
-- **Estado:** aprobado en Etapa 0; implementación/validación pendiente.
+- **Estado:** implementado en Etapa 9; validación en corpus etiquetado pendiente.
 - **Fecha:** 2026-11-25.
 
 ## Contexto
@@ -13,12 +13,16 @@ En cuatro imágenes sintéticas con seis líneas de texto, proyecciones horizont
 2. Incluir Tesseract OSD siempre: mejor señal direccional potencial, con varios MB de núcleo/modelo y costo por página.
 3. Ofrecer OSD opcional/diferido y clasificar dudas como revisión: conserva precisión y no impone costo de OCR al flujo normal.
 
-## Decisión propuesta
+## Decisión
 
-Usar PDF.js/texto para páginas digitales y proyecciones simples en escaneos como señal, no como certeza. No adivinar 0° frente a 180° con geometría solamente. Mantener Tesseract OSD como módulo opcional empaquetado localmente; cargarlo en Worker solo si se aprueba y la persona lo solicita. Una sugerencia no altera la rotación; corrección automática desactivada por defecto.
+Usar la dirección del texto digital de PDF.js para sugerir el giro objetivo solo si hay texto suficiente, domina una sola dirección cardinal y no hay escritura vertical. Las páginas sin texto digital, con texto insuficiente, direcciones mezcladas o inclinación no cardinal requieren revisión manual. Las páginas escaneadas no reciben una sugerencia de dirección porque las proyecciones por sí solas no distinguen todos los giros posibles; no se incluye OCR en esta etapa. Tesseract OSD permanece como opción futura, local y explícita, si se aprueba su inclusión.
+
+Una sugerencia nunca altera la rotación hasta que la persona elige aplicarla. Aplicar una sugerencia o rotar una selección genera un único comando reversible; la corrección automática está desactivada.
 
 ## Consecuencias
 
 - Requiere corpus etiquetado de páginas mixtas y suficientes ejemplos de 0°, 90°, 180° y 270° para fijar confianza y cobertura.
 - La prueba sintética 4/4 no es una precisión de producto.
 - Tesseract.js necesita `legacyCore`/`legacyLang` para `worker.detect`; distribuir el modelo local y verificar ausencia de tráfico externo.
+- La Etapa 9 usa umbrales heurísticos de texto, no calibrados; la interfaz no declara un porcentaje de confianza. La validación de precisión/cobertura queda pendiente del corpus de aceptación.
+- Las páginas escaneadas y las páginas ambiguas conservan los controles de giro manual y selección múltiple, pero requieren que la persona determine el sentido.

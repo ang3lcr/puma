@@ -1,5 +1,14 @@
 # Changelog
 
+## Etapa 9
+
+- Añadido análisis cancelable por página de la orientación de texto digital. Solo se sugiere un giro cuando al menos 16 caracteres válidos comparten una dirección cardinal dominante (≥90 %); escritura vertical, poco texto, direcciones mixtas, inclinación no cardinal y páginas sin texto requieren revisión.
+- Se consideran la rotación nativa del PDF y la rotación actual del proyecto para calcular el giro objetivo. El análisis no altera páginas automáticamente; las sugerencias se aplican por página o en lote, con un único comando reversible.
+- Añadidas selección múltiple y rotación manual masiva 90° a izquierda/derecha o 180°, además de controles individuales. Las páginas escaneadas sin texto digital se dejan a criterio manual; no se incorporó OCR.
+- Validación: typecheck y lint correctos; 10 archivos de pruebas unitarias/componentes, 41 pruebas aprobadas; build correcto; 7 E2E aprobadas, incluidas las cuatro orientaciones, `/Rotate` nativo, corrección individual/masiva y viewport móvil.
+- Bundle de producción: shell JS 314.94 kB / 95.28 kB gzip, CSS 19.06 kB / 4.23 kB gzip, módulo de orientación diferido 2.28 kB / 1.07 kB gzip, módulo PDF.js diferido 447.46 kB / 134.94 kB gzip y Worker local de PDF.js 1,271.91 kB.
+- La precisión ≥99 % y cobertura ≥70 % no se declaran: los límites son heurísticos y no existe corpus etiquetado representativo. Las métricas de rendimiento/memoria en Chrome/Edge nativos también siguen pendientes.
+
 ## Etapa 8
 
 - Añadido análisis local, secuencial y cancelable de páginas: texto y anotaciones se identifican antes de rasterizar; las demás páginas se renderizan a una muestra acotada y los píxeles se clasifican en un Worker local.

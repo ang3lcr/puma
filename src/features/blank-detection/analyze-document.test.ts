@@ -19,6 +19,7 @@ const projectPage: ProjectPage = {
   duplicatedFromPageId: null,
   blankAnalysis: null,
   blankReviewDecision: null,
+  orientationAnalysis: null,
   isDeleted: false,
 };
 

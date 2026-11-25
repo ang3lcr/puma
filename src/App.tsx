@@ -18,6 +18,10 @@ import {
   getBlankPageStatusLabel,
 } from './features/blank-detection/presentation';
 import type { BlankPageReviewDecision } from './features/blank-detection/types';
+import {
+  getOrientationReasonLabel,
+  getOrientationStatusLabel,
+} from './features/orientation/presentation';
 import { es } from './i18n/es';
 import { formatBytes, formatNumber } from './i18n/format';
 import { PageRenderQueue } from './pdf/page-render-queue';
@@ -28,6 +32,7 @@ import {
   createProjectHistoryState,
   createRestorePageCommand,
   createRotatePageCommand,
+  createSetPageRotationsCommand,
   createSetBlankReviewDecisionCommand,
   getOrderedProjectDocuments,
   getOrderedProjectPages,
@@ -70,6 +75,13 @@ interface BlankScanState {
   total: number;
 }
 
+interface OrientationScanState {
+  documentId: string;
+  status: 'running' | 'completed' | 'cancelled' | 'failed';
+  completed: number;
+  total: number;
+}
+
 function App() {
   const [theme, setTheme] = useState<Theme>('dark');
   const [projectHistory, dispatchProject] = useReducer(
@@ -85,6 +97,10 @@ function App() {
     (PageInfo & { pageId: string }) | null
   >(null);
   const [blankScan, setBlankScan] = useState<BlankScanState | null>(null);
+  const [orientationScan, setOrientationScan] =
+    useState<OrientationScanState | null>(null);
+  const [selectedOrientationPageIds, setSelectedOrientationPageIds] =
+    useState<ReadonlySet<string>>(() => new Set());
   const [isImporting, setIsImporting] = useState(false);
   const [isOpeningDocument, setIsOpeningDocument] = useState(false);
   const [activePdfSession, setActivePdfSession] =
@@ -112,6 +128,7 @@ function App() {
   const fullReadDialogRef = useRef<HTMLDivElement>(null);
   const importRunning = useRef(false);
   const blankScanAbort = useRef<AbortController | null>(null);
+  const orientationScanAbort = useRef<AbortController | null>(null);
   const isDark = theme === 'dark';
   const isLoadingDocument = isImporting || isOpeningDocument;
   const activeDocument = documents.find(
@@ -138,6 +155,20 @@ function App() {
       : null;
   const isBlankScanRunning =
     blankScan?.documentId === activeDocumentId && blankScan.status === 'running';
+  const isOrientationScanRunning =
+    orientationScan?.documentId === activeDocumentId &&
+    orientationScan.status === 'running';
+  const isPageAnalysisRunning =
+    isBlankScanRunning || isOrientationScanRunning;
+  const selectedOrientationPages = activeDocumentPages.filter((page) =>
+    selectedOrientationPageIds.has(page.id),
+  );
+  const pendingOrientationSuggestions = activeDocumentPages.filter(
+    (page) =>
+      page.orientationAnalysis?.status === 'suggestion' &&
+      page.orientationAnalysis.targetRotationDeltaDegrees !==
+        page.rotationDeltaDegrees,
+  );
   const currentPageInfo =
     activePageInfo?.pageId === currentProjectPage?.id ? activePageInfo : null;
   const totalPages = projectPages.filter((page) => !page.isDeleted).length;
@@ -149,14 +180,14 @@ function App() {
   );
 
   const redoProjectChange = useCallback((): void => {
-    if (isBlankScanRunning) {
+    if (isPageAnalysisRunning) {
       return;
     }
     dispatchProject({ type: 'redo' });
-  }, [dispatchProject, isBlankScanRunning]);
+  }, [dispatchProject, isPageAnalysisRunning]);
 
   const undoProjectChange = useCallback((): void => {
-    if (isBlankScanRunning) {
+    if (isPageAnalysisRunning) {
       return;
     }
     const command = projectHistory.undoStack.at(-1);
@@ -176,12 +207,13 @@ function App() {
       setActivePageId(null);
       setActivePageInfo(null);
       setActivePdfSession(null);
+      setSelectedOrientationPageIds(new Set());
     }
     dispatchProject({ type: 'undo' });
   }, [
     activeDocumentId,
     dispatchProject,
-    isBlankScanRunning,
+    isPageAnalysisRunning,
     projectHistory.undoStack,
   ]);
 
@@ -215,7 +247,7 @@ function App() {
     setActivePageId(operation.page.id);
   }
 
-  function rotateSelectedPage(): void {
+  function rotateSelectedPage(degrees: 90 | 180 | 270): void {
     if (!currentProjectPage) {
       return;
     }
@@ -224,7 +256,92 @@ function App() {
       command: createRotatePageCommand(
         projectHistory.project,
         currentProjectPage.id,
+        degrees,
       ),
+    });
+  }
+
+  function rotateSelectedPages(degrees: 90 | 180 | 270): void {
+    if (selectedOrientationPages.length === 0 || isPageAnalysisRunning) {
+      return;
+    }
+    dispatchProject({
+      type: 'execute',
+      command: createSetPageRotationsCommand(
+        projectHistory.project,
+        selectedOrientationPages.map((page) => ({
+          pageId: page.id,
+          rotationDeltaDegrees: (page.rotationDeltaDegrees + degrees) % 360,
+        })),
+        'Girar páginas seleccionadas',
+      ),
+    });
+    setSelectedOrientationPageIds(new Set());
+  }
+
+  function applyOrientationSuggestion(pageId: string): void {
+    const page = projectHistory.project.pages.get(pageId);
+    const analysis = page?.orientationAnalysis;
+    if (
+      !page ||
+      analysis?.status !== 'suggestion' ||
+      analysis.targetRotationDeltaDegrees === page.rotationDeltaDegrees ||
+      isPageAnalysisRunning
+    ) {
+      return;
+    }
+    dispatchProject({
+      type: 'execute',
+      command: createSetPageRotationsCommand(
+        projectHistory.project,
+        [
+          {
+            pageId,
+            rotationDeltaDegrees: analysis.targetRotationDeltaDegrees,
+          },
+        ],
+        'Aplicar sugerencia de orientación',
+      ),
+    });
+  }
+
+  function applyAllOrientationSuggestions(): void {
+    if (pendingOrientationSuggestions.length === 0 || isPageAnalysisRunning) {
+      return;
+    }
+    dispatchProject({
+      type: 'execute',
+      command: createSetPageRotationsCommand(
+        projectHistory.project,
+        pendingOrientationSuggestions.flatMap((page) => {
+          const analysis = page.orientationAnalysis;
+          return analysis?.status === 'suggestion'
+            ? [
+                {
+                  pageId: page.id,
+                  rotationDeltaDegrees:
+                    analysis.targetRotationDeltaDegrees,
+                },
+              ]
+            : [];
+        }),
+        'Aplicar sugerencias de orientación',
+      ),
+    });
+  }
+
+  function toggleOrientationPageSelection(pageId: string): void {
+    if (isPageAnalysisRunning) {
+      return;
+    }
+    setSelectedOrientationPageIds((current) => {
+      const next = new Set(current);
+      if (next.has(pageId)) {
+        next.delete(pageId);
+      } else {
+        next.add(pageId);
+      }
+      return next;
     });
   }
 
@@ -259,7 +376,7 @@ function App() {
       !activeDocument ||
       !activeSession ||
       activeDocumentPages.length === 0 ||
-      isBlankScanRunning
+      isPageAnalysisRunning
     ) {
       return;
     }
@@ -335,7 +452,7 @@ function App() {
   function reviewSelectedPage(
     decision: BlankPageReviewDecision | null,
   ): void {
-    if (!currentProjectPage || isBlankScanRunning) {
+    if (!currentProjectPage || isPageAnalysisRunning) {
       return;
     }
     dispatchProject({
@@ -350,6 +467,86 @@ function App() {
 
   function cancelBlankScan(): void {
     blankScanAbort.current?.abort();
+  }
+
+  async function runOrientationScan(): Promise<void> {
+    if (
+      !activeDocument ||
+      !activeSession ||
+      activeDocumentPages.length === 0 ||
+      isPageAnalysisRunning
+    ) {
+      return;
+    }
+
+    const controller = new AbortController();
+    orientationScanAbort.current = controller;
+    const documentId = activeDocument.id;
+    const pages = activeDocumentPages;
+    let completed = 0;
+    setOrientationScan({
+      documentId,
+      status: 'running',
+      completed,
+      total: pages.length,
+    });
+
+    try {
+      const { analyzeDocumentOrientation } = await import(
+        './features/orientation/analyze-document-orientation'
+      );
+      const result = await analyzeDocumentOrientation({
+        document: activeSession.document,
+        pages,
+        signal: controller.signal,
+        onPageAnalysis: (pageId, analysis) => {
+          dispatchProject({
+            type: 'record-page-orientation-analysis',
+            pageId,
+            analysis,
+          });
+        },
+        onProgress: (progress) => {
+          completed = progress.completed;
+          setOrientationScan((current) =>
+            current?.documentId === documentId
+              ? { ...current, completed }
+              : current,
+          );
+        },
+      });
+      setOrientationScan({
+        documentId,
+        status: result,
+        completed,
+        total: pages.length,
+      });
+    } catch (error) {
+      if (controller.signal.aborted || isAbortError(error)) {
+        setOrientationScan({
+          documentId,
+          status: 'cancelled',
+          completed,
+          total: pages.length,
+        });
+      } else {
+        console.error('Unable to complete orientation analysis.', error);
+        setOrientationScan({
+          documentId,
+          status: 'failed',
+          completed,
+          total: pages.length,
+        });
+      }
+    } finally {
+      if (orientationScanAbort.current === controller) {
+        orientationScanAbort.current = null;
+      }
+    }
+  }
+
+  function cancelOrientationScan(): void {
+    orientationScanAbort.current?.abort();
   }
 
   useEffect(() => {
@@ -434,7 +631,10 @@ function App() {
   }, [renderQueue]);
 
   useEffect(() => {
-    return () => blankScanAbort.current?.abort();
+    return () => {
+      blankScanAbort.current?.abort();
+      orientationScanAbort.current?.abort();
+    };
   }, []);
 
   function requestDocumentPassword(
@@ -460,7 +660,7 @@ function App() {
     if (
       files.length === 0 ||
       importRunning.current ||
-      isBlankScanRunning
+      isPageAnalysisRunning
     ) {
       return;
     }
@@ -495,6 +695,7 @@ function App() {
 
         const { session, ...documentRecord } = imported;
         dispatchProject({ type: 'import-document', document: documentRecord });
+        setSelectedOrientationPageIds(new Set());
         setActiveDocumentId(documentRecord.id);
         setActivePageId(
           documentRecord.pageCount > 0
@@ -520,7 +721,7 @@ function App() {
   async function selectDocument(document: ProjectDocument): Promise<void> {
     if (
       isLoadingDocument ||
-      isBlankScanRunning ||
+      isPageAnalysisRunning ||
       importRunning.current ||
       activePdfSession?.documentId === document.id
     ) {
@@ -550,6 +751,7 @@ function App() {
         },
       });
 
+      setSelectedOrientationPageIds(new Set());
       setActiveDocumentId(document.id);
       const firstPage = getOrderedProjectPages(projectHistory.project).find(
         (page) => page.documentId === document.id && !page.isDeleted,
@@ -581,7 +783,7 @@ function App() {
 
   function handleDrop(event: DragEvent<HTMLElement>): void {
     event.preventDefault();
-    if (!isLoadingDocument && !isBlankScanRunning) {
+    if (!isLoadingDocument && !isPageAnalysisRunning) {
       void importFiles(Array.from(event.dataTransfer.files));
     }
   }
@@ -755,7 +957,7 @@ function App() {
               aria-label={es.history.undo}
               title={es.history.undo}
               disabled={
-                isBlankScanRunning || projectHistory.undoStack.length === 0
+                isPageAnalysisRunning || projectHistory.undoStack.length === 0
               }
               onClick={undoProjectChange}
             >
@@ -768,7 +970,7 @@ function App() {
               aria-label={es.history.redo}
               title={es.history.redo}
               disabled={
-                isBlankScanRunning || projectHistory.redoStack.length === 0
+                isPageAnalysisRunning || projectHistory.redoStack.length === 0
               }
               onClick={redoProjectChange}
             >
@@ -828,7 +1030,7 @@ function App() {
                       className="document-list-item"
                       type="button"
                       aria-pressed={document.id === activeDocumentId}
-                      disabled={isLoadingDocument || isBlankScanRunning}
+                      disabled={isLoadingDocument || isPageAnalysisRunning}
                       onClick={() => void selectDocument(document)}
                     >
                       <span className="document-list-name">
@@ -853,7 +1055,9 @@ function App() {
                   className="blank-scan-button"
                   type="button"
                   disabled={
-                    !isBlankScanRunning && activeDocumentPages.length === 0
+                    (!isBlankScanRunning &&
+                      (activeDocumentPages.length === 0 ||
+                        isPageAnalysisRunning))
                   }
                   onClick={() =>
                     isBlankScanRunning
@@ -894,6 +1098,118 @@ function App() {
                   )}
                 </div>
               )}
+            {activeDocument && activeSession && (
+              <div className="orientation-tools">
+                <button
+                  className="orientation-action-button"
+                  type="button"
+                  disabled={
+                    !isOrientationScanRunning &&
+                    (activeDocumentPages.length === 0 ||
+                      isPageAnalysisRunning)
+                  }
+                  onClick={() =>
+                    isOrientationScanRunning
+                      ? cancelOrientationScan()
+                      : void runOrientationScan()
+                  }
+                >
+                  {isOrientationScanRunning
+                    ? es.orientation.cancel
+                    : es.orientation.analyze}
+                </button>
+                {orientationScan?.documentId === activeDocument.id && (
+                  <div className="orientation-scan-status">
+                    {orientationScan.status === 'running' ? (
+                      <>
+                        <p role="status">
+                          {es.orientation.scanning}:{' '}
+                          {formatNumber(orientationScan.completed)} /{' '}
+                          {formatNumber(orientationScan.total)}
+                        </p>
+                        <progress
+                          aria-label={es.orientation.progress}
+                          max={orientationScan.total}
+                          value={orientationScan.completed}
+                        />
+                      </>
+                    ) : (
+                      <p
+                        role={
+                          orientationScan.status === 'failed'
+                            ? 'alert'
+                            : 'status'
+                        }
+                      >
+                        {orientationScan.status === 'completed'
+                          ? es.orientation.scanComplete
+                          : orientationScan.status === 'cancelled'
+                            ? es.orientation.scanCancelled
+                            : es.orientation.scanFailed}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <p className="orientation-disclaimer">
+                  {es.orientation.disclaimer}
+                </p>
+                {pendingOrientationSuggestions.length > 0 && (
+                  <button
+                    className="orientation-action-button"
+                    type="button"
+                    disabled={isPageAnalysisRunning}
+                    onClick={applyAllOrientationSuggestions}
+                  >
+                    {es.orientation.applySuggestions} (
+                    {formatNumber(pendingOrientationSuggestions.length)})
+                  </button>
+                )}
+                {selectedOrientationPages.length > 0 && (
+                  <div
+                    className="orientation-batch-controls"
+                    role="group"
+                    aria-label={es.orientation.region}
+                  >
+                    <span>
+                      {formatNumber(selectedOrientationPages.length)}{' '}
+                      {es.orientation.selectedCount}
+                    </span>
+                    <button
+                      className="orientation-action-button"
+                      type="button"
+                      disabled={isPageAnalysisRunning}
+                      onClick={() => rotateSelectedPages(270)}
+                    >
+                      {es.orientation.rotateLeft}
+                    </button>
+                    <button
+                      className="orientation-action-button"
+                      type="button"
+                      disabled={isPageAnalysisRunning}
+                      onClick={() => rotateSelectedPages(90)}
+                    >
+                      {es.orientation.rotateRight}
+                    </button>
+                    <button
+                      className="orientation-action-button"
+                      type="button"
+                      disabled={isPageAnalysisRunning}
+                      onClick={() => rotateSelectedPages(180)}
+                    >
+                      {es.orientation.rotateHalf}
+                    </button>
+                    <button
+                      className="orientation-clear-selection"
+                      type="button"
+                      disabled={isPageAnalysisRunning}
+                      onClick={() => setSelectedOrientationPageIds(new Set())}
+                    >
+                      {es.orientation.clearSelection}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {activeDocument && activeSession ? (
               <ThumbnailList
                 key={activeDocument.id}
@@ -904,7 +1220,9 @@ function App() {
                 selectedPageId={selectedPageId}
                 onSelectPage={setActivePageId}
                 onRestorePage={restorePage}
-                pageActionsDisabled={isBlankScanRunning}
+                selectedOrientationPageIds={selectedOrientationPageIds}
+                onToggleOrientationPage={toggleOrientationPageSelection}
+                pageActionsDisabled={isPageAnalysisRunning}
                 renderQueue={renderQueue}
               />
             ) : (
@@ -932,7 +1250,7 @@ function App() {
             accept="application/pdf,.pdf"
             multiple
             aria-label={es.documents.importButton}
-            disabled={isLoadingDocument || isBlankScanRunning}
+            disabled={isLoadingDocument || isPageAnalysisRunning}
             onChange={handleFileInputChange}
           />
           <div className="workspace-header">
@@ -988,7 +1306,7 @@ function App() {
                 pageCount={activeDocumentPages.length}
                 canMoveUp={activePageNumber > 1}
                 canMoveDown={activePageNumber < activeDocumentPages.length}
-                pageActionsDisabled={isBlankScanRunning}
+                pageActionsDisabled={isPageAnalysisRunning}
                 onPageChange={(pageNumber) =>
                   setActivePageId(activeDocumentPages[pageNumber - 1]?.id ?? null)
                 }
@@ -998,7 +1316,7 @@ function App() {
                 onDeletePage={deleteSelectedPage}
                 onPageInfo={updatePageInfo}
                 onImport={() => fileInputRef.current?.click()}
-                importDisabled={isLoadingDocument || isBlankScanRunning}
+                importDisabled={isLoadingDocument || isPageAnalysisRunning}
                 renderQueue={renderQueue}
               />
             ) : (
@@ -1027,7 +1345,7 @@ function App() {
                     <button
                       className="import-button"
                       type="button"
-                      disabled={isLoadingDocument || isBlankScanRunning}
+                      disabled={isLoadingDocument || isPageAnalysisRunning}
                       onClick={() => fileInputRef.current?.click()}
                     >
                       {es.documents.importButton}
@@ -1125,7 +1443,7 @@ function App() {
                           <button
                             className="blank-review-button"
                             type="button"
-                            disabled={isBlankScanRunning}
+                            disabled={isPageAnalysisRunning}
                             onClick={() => reviewSelectedPage(null)}
                           >
                             {es.blankDetection.clearDecision}
@@ -1135,7 +1453,7 @@ function App() {
                             <button
                               className="blank-review-button"
                               type="button"
-                              disabled={isBlankScanRunning}
+                              disabled={isPageAnalysisRunning}
                               onClick={() =>
                                 reviewSelectedPage('confirmed-blank')
                               }
@@ -1145,7 +1463,7 @@ function App() {
                             <button
                               className="blank-review-button"
                               type="button"
-                              disabled={isBlankScanRunning}
+                              disabled={isPageAnalysisRunning}
                               onClick={() => reviewSelectedPage('keep')}
                             >
                               {es.blankDetection.keep}
@@ -1158,6 +1476,49 @@ function App() {
                     </>
                   ) : (
                     <p>{es.blankDetection.notAnalyzed}</p>
+                  )}
+                </section>
+              )}
+              {currentProjectPage && (
+                <section
+                  className="orientation-review-properties"
+                  aria-label={es.orientation.region}
+                >
+                  <h3>{es.orientation.heading}</h3>
+                  {currentProjectPage.orientationAnalysis ? (
+                    <>
+                      <p className="orientation-analysis-status">
+                        {getOrientationStatusLabel(
+                          currentProjectPage.orientationAnalysis,
+                          currentProjectPage.rotationDeltaDegrees,
+                        )}
+                      </p>
+                      <p>
+                        {getOrientationReasonLabel(
+                          currentProjectPage.orientationAnalysis,
+                        )}
+                      </p>
+                      {currentProjectPage.orientationAnalysis.status ===
+                        'suggestion' &&
+                        currentProjectPage.orientationAnalysis
+                          .targetRotationDeltaDegrees !==
+                          currentProjectPage.rotationDeltaDegrees && (
+                          <button
+                            className="orientation-action-button"
+                            type="button"
+                            disabled={isPageAnalysisRunning}
+                            onClick={() =>
+                              applyOrientationSuggestion(
+                                currentProjectPage.id,
+                              )
+                            }
+                          >
+                            {es.orientation.applySuggestion}
+                          </button>
+                        )}
+                    </>
+                  ) : (
+                    <p>{es.orientation.notAnalyzed}</p>
                   )}
                 </section>
               )}

@@ -4,6 +4,7 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { es } from '../../i18n/es';
 import { formatNumber } from '../../i18n/format';
 import { getBlankPageStatusLabel } from '../blank-detection/presentation';
+import { getOrientationStatusLabel } from '../orientation/presentation';
 import type { PageRenderQueue } from '../../pdf/page-render-queue';
 import { normalizePageRotation } from '../../pdf/page-rotation';
 import type { ProjectPage } from '../../store/project-store';
@@ -20,6 +21,8 @@ interface ThumbnailListProps {
   selectedPageId: string | null;
   onSelectPage: (pageId: string) => void;
   onRestorePage: (pageId: string) => void;
+  selectedOrientationPageIds: ReadonlySet<string>;
+  onToggleOrientationPage: (pageId: string) => void;
   pageActionsDisabled: boolean;
   cache: ByteLruCache<string, ImageBitmap>;
   renderQueue: PageRenderQueue;
@@ -32,6 +35,8 @@ export function ThumbnailList({
   selectedPageId,
   onSelectPage,
   onRestorePage,
+  selectedOrientationPageIds,
+  onToggleOrientationPage,
   pageActionsDisabled,
   cache,
   renderQueue,
@@ -134,6 +139,13 @@ export function ThumbnailList({
                   page.blankAnalysis,
                   page.blankReviewDecision,
                 )}
+                orientationLabel={getOrientationStatusLabel(
+                  page.orientationAnalysis,
+                  page.rotationDeltaDegrees,
+                )}
+                orientationSelected={selectedOrientationPageIds.has(page.id)}
+                orientationSelectionDisabled={pageActionsDisabled}
+                onToggleOrientationPage={onToggleOrientationPage}
                 selected={page.id === selectedPageId}
                 onSelect={onSelectPage}
                 renderQueue={renderQueue}
@@ -189,6 +201,10 @@ interface PageThumbnailProps {
   page: ProjectPage;
   displayPageNumber: number;
   analysisLabel: string | null;
+  orientationLabel: string | null;
+  orientationSelected: boolean;
+  orientationSelectionDisabled: boolean;
+  onToggleOrientationPage: (pageId: string) => void;
   selected: boolean;
   onSelect: (pageId: string) => void;
   renderQueue: PageRenderQueue;
@@ -201,6 +217,10 @@ function PageThumbnail({
   page,
   displayPageNumber,
   analysisLabel,
+  orientationLabel,
+  orientationSelected,
+  orientationSelectionDisabled,
+  onToggleOrientationPage,
   selected,
   onSelect,
   renderQueue,
@@ -366,10 +386,24 @@ function PageThumbnail({
         </span>
       </button>
       <figcaption>
-        {es.documents.pageLabel} {formatNumber(displayPageNumber)}
+        <span>
+          {es.documents.pageLabel} {formatNumber(displayPageNumber)}
+        </span>
+        <label className="thumbnail-orientation-select">
+          <input
+            type="checkbox"
+            aria-label={`${es.orientation.selectForBatch} ${formatNumber(displayPageNumber)}`}
+            checked={orientationSelected}
+            disabled={orientationSelectionDisabled}
+            onChange={() => onToggleOrientationPage(page.id)}
+          />
+        </label>
       </figcaption>
       {analysisLabel && (
         <span className="thumbnail-analysis-label">{analysisLabel}</span>
+      )}
+      {orientationLabel && (
+        <span className="thumbnail-orientation-label">{orientationLabel}</span>
       )}
     </figure>
   );

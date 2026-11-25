@@ -1,6 +1,6 @@
 # Roadmap
 
-**Estado actual:** Etapas 0–7 aprobadas; Etapa 8 completada y pendiente de aprobación. Cada etapa se desarrolla en una interacción, se valida y documenta, se crea su commit/tag y luego se detiene hasta recibir aprobación. No avanzar automáticamente.
+**Estado actual:** Etapas 0–8 aprobadas; Etapa 9 completada y pendiente de aprobación. Cada etapa se desarrolla en una interacción, se valida y documenta, se crea su commit/tag y luego se detiene hasta recibir aprobación. No avanzar automáticamente.
 
 | Etapa | Alcance | Estado |
 |---|---|---|
@@ -12,8 +12,8 @@
 | 5 | Cola priorizada de render PDF, cancelación, progreso y ciclo de vida | Completada y aprobada; commit `b1d6d01` |
 | 6 | Modelo de proyecto, comandos delta y deshacer/rehacer | Completada y aprobada |
 | 7 | Reordenar, eliminar/restaurar, duplicar y rotar páginas dentro del documento de origen | Completada y aprobada |
-| 8 | Detección conservadora de páginas en blanco y revisión | Completada; pendiente de aprobación |
-| 9 | Sugerencias y corrección de orientación, manual y masiva | Pendiente |
+| 8 | Detección conservadora de páginas en blanco y revisión | Completada y aprobada |
+| 9 | Sugerencias y corrección de orientación, manual y masiva | Completada; pendiente de aprobación |
 | 10 | Editor de márgenes, CropBox y recorte físico explícito | Pendiente |
 | 11 | Combinación de documentos y limitaciones de preservación | Pendiente |
 | 12 | Guardado, autoguardado, recuperación, cuotas y migraciones | Pendiente |

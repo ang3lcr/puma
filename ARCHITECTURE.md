@@ -1,6 +1,6 @@
 # Arquitectura propuesta
 
-**Estado:** arquitectura base aprobada en Etapa 0; etapas 1–7 aprobadas y Etapa 8 implementada, pendiente de aprobación. Persistencia de proyecto y exportación siguen pendientes de sus etapas.
+**Estado:** arquitectura base aprobada en Etapa 0; etapas 1–8 aprobadas y Etapa 9 implementada, pendiente de aprobación. Persistencia de proyecto y exportación siguen pendientes de sus etapas.
 
 ## Alcance técnico
 
@@ -30,7 +30,7 @@ src/
     documents/         importación, metadatos y referencias a fuentes
     pages/             lista virtualizada, visor y selección
     blank-detection/   clasificación conservadora y revisión
-    orientation/       orientación sugerida y confirmación
+    orientation/       análisis de texto, sugerencias y corrección manual/masiva
     margins/           guías, unidades y modos de recorte
     merging/           orden y composición lógica
     export/            estimación, generación y validación
@@ -63,9 +63,10 @@ La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniat
 1. Importar uno o varios archivos sin alterar el original. PDF.js lee rangos y obtiene metadatos; el conteo de páginas no requiere renderizar todas las páginas. Solo se conserva abierta la sesión PDF del documento activo; al cambiar de documento se libera y el seleccionado se reabre desde su `File`.
 2. Renderizar miniaturas únicamente para las páginas próximas al viewport y renderizar en el visor solo la página seleccionada. La cola serializa las tareas de canvas y prioriza la página seleccionada, luego el análisis y finalmente las miniaturas.
 3. Para la detección de páginas vacías, examinar texto y anotaciones antes de renderizar; cuando no existan, renderizar una muestra de hasta 256 × 256 píxeles y transferirla al Worker local. Procesar páginas secuencialmente y permitir cancelación. Una señal dispersa o una anotación requiere revisión manual.
-4. Registrar sugerencias de análisis sin modificar el contenido. No eliminar páginas automáticamente; las decisiones manuales son reversibles. La confianza no se presenta como porcentaje mientras el detector carezca de calibración con un corpus etiquetado.
-5. Registrar cada importación y operación de página como una orden reversible del proyecto. Ctrl/Cmd+Z deshace, Ctrl/Cmd+Shift+Z o Ctrl/Cmd+Y rehace; los campos editables conservan sus atajos nativos. El reordenamiento, duplicación, rotación y eliminación/restauración se aplican mediante deltas; los movimientos entre documentos se añaden en la Etapa 11.
-6. Estimar memoria antes de exportar. Crear el PDF completo en memoria con pdf-lib solo dentro del presupuesto; validar el buffer reabriéndolo con PDF.js y contar páginas antes de escribirlo a destino. Usar escritura temporal/atómica si la API disponible la admite. Si el presupuesto no alcanza, ofrecer archivos de salida por rangos o rechazar la exportación individual con un mensaje claro.
+4. Registrar sugerencias de análisis sin modificar el contenido. No eliminar páginas automáticamente; las decisiones manuales son reversibles. La confianza no se presenta como porcentaje mientras los detectores carezcan de calibración con un corpus etiquetado.
+5. Para orientar páginas, usar la dirección dominante de texto digital solo cuando sea suficiente y coherente; guardar el giro objetivo como sugerencia, nunca aplicarlo automáticamente. Páginas escaneadas sin texto digital, escritura vertical, direcciones mezcladas o texto inclinado quedan para inspección manual. No se incluye OCR en esta etapa.
+6. Registrar cada importación y operación de página como una orden reversible del proyecto. Ctrl/Cmd+Z deshace, Ctrl/Cmd+Shift+Z o Ctrl/Cmd+Y rehace; los campos editables conservan sus atajos nativos. Las rotaciones de una o varias páginas se agrupan en un solo comando delta; los movimientos entre documentos se añaden en la Etapa 11.
+7. Estimar memoria antes de exportar. Crear el PDF completo en memoria con pdf-lib solo dentro del presupuesto; validar el buffer reabriéndolo con PDF.js y contar páginas antes de escribirlo a destino. Usar escritura temporal/atómica si la API disponible la admite. Si el presupuesto no alcanza, ofrecer archivos de salida por rangos o rechazar la exportación individual con un mensaje claro.
 
 ## Seguridad, privacidad y compatibilidad
 

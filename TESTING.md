@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–8 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–9 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
 
 ## Entorno de referencia
 
@@ -147,3 +147,16 @@ Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 
 | `npm run test:e2e` | Build correcto; 6 E2E aprobadas, incluida detección en PDF real, revisión reversible y conservación del número de páginas |
 
 El fixture E2E confirma que una página blanca se marca como candidata y una página con texto se clasifica como contenido. Las anotaciones se envían a revisión sin rasterizar; una cancelación durante la lectura de texto detiene el análisis. El detector procesa secuencialmente y la clasificación de píxeles corre en Worker local. No se midieron falsos positivos/recall, memoria ni tareas largas: no hay corpus etiquetado y siguen pendientes las pruebas de Chrome/Edge nativos en hardware de referencia.
+
+## Validación de Etapa 9
+
+Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 1.65.1 y Chromium 159.0.8154.6:
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm test` | 10 archivos, 41 pruebas aprobadas; incluye sugerencias cardinales, entradas ambiguas, cancelación y rotaciones en lote reversibles |
+| `npm run test:e2e` | Build correcto; 7 E2E aprobadas, incluida orientación de texto a 0°/90°/180°/270°, rotación nativa `/Rotate`, corrección individual/masiva, undo/redo y viewport de 390 px |
+
+El fixture sintético valida el cálculo geométrico y los comandos de UI, no la precisión sobre documentos reales. El analizador requiere al menos 16 caracteres y una dirección cardinal con ≥90 % del texto válido; estos umbrales aún no se calibran. Páginas sin texto digital, escritura vertical, poco texto, direcciones mixtas y texto no cardinal quedan para revisión manual. No se midieron precisión/cobertura en corpus, tareas largas, memoria ni rendimiento en Chrome/Edge nativos.

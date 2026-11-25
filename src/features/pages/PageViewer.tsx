@@ -34,7 +34,7 @@ interface PageViewerProps {
   onPageChange: (pageNumber: number) => void;
   onMovePage: (direction: 'up' | 'down') => void;
   onDuplicatePage: () => void;
-  onRotatePage: () => void;
+  onRotatePage: (degrees: 90 | 180 | 270) => void;
   onDeletePage: () => void;
   onPageInfo: (pageId: string, info: PageInfo) => void;
   onImport: () => void;
@@ -327,9 +327,29 @@ export function PageViewer({
             aria-label={es.pages.rotate}
             title={es.pages.rotate}
             disabled={pageActionsDisabled}
-            onClick={onRotatePage}
+            onClick={() => onRotatePage(90)}
           >
             ↻
+          </button>
+          <button
+            className="viewer-control"
+            type="button"
+            aria-label={es.pages.rotateCounterclockwise}
+            title={es.pages.rotateCounterclockwise}
+            disabled={pageActionsDisabled}
+            onClick={() => onRotatePage(270)}
+          >
+            ↺
+          </button>
+          <button
+            className="viewer-control"
+            type="button"
+            aria-label={es.pages.rotateHalfTurn}
+            title={es.pages.rotateHalfTurn}
+            disabled={pageActionsDisabled}
+            onClick={() => onRotatePage(180)}
+          >
+            ↻180
           </button>
           <button
             className="viewer-control"

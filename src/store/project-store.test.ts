@@ -8,6 +8,7 @@ import {
   createProjectHistoryState,
   createRestorePageCommand,
   createRotatePageCommand,
+  createSetPageRotationsCommand,
   projectHistoryReducer,
 } from './project-store';
 
@@ -66,6 +67,7 @@ describe('project history', () => {
       isDeleted: false,
       blankAnalysis: null,
       blankReviewDecision: null,
+      orientationAnalysis: null,
     });
 
     const undone = projectHistoryReducer(imported, { type: 'undo' });
@@ -325,5 +327,64 @@ describe('project history', () => {
       history.project.pages.get('document-1:page:1')?.blankReviewDecision,
     ).toBe('confirmed-blank');
     expect(history.undoStack).toHaveLength(2);
+  });
+
+  it('applies selected page rotations as one reversible command', () => {
+    let history = projectHistoryReducer(createProjectHistoryState('project-1'), {
+      type: 'import-document',
+      document: createDocument('document-1', 3),
+    });
+    const command = createSetPageRotationsCommand(
+      history.project,
+      [
+        { pageId: 'document-1:page:1', rotationDeltaDegrees: 90 },
+        { pageId: 'document-1:page:3', rotationDeltaDegrees: 270 },
+      ],
+      'Corregir páginas seleccionadas',
+    );
+    history = projectHistoryReducer(history, { type: 'execute', command });
+
+    expect(history.undoStack).toHaveLength(2);
+    expect(history.project.pages.get('document-1:page:1')?.rotationDeltaDegrees)
+      .toBe(90);
+    expect(history.project.pages.get('document-1:page:2')?.rotationDeltaDegrees)
+      .toBe(0);
+    expect(history.project.pages.get('document-1:page:3')?.rotationDeltaDegrees)
+      .toBe(270);
+
+    history = projectHistoryReducer(history, { type: 'undo' });
+    expect(
+      history.project.pages.get('document-1:page:1')?.rotationDeltaDegrees,
+    ).toBe(0);
+    expect(
+      history.project.pages.get('document-1:page:3')?.rotationDeltaDegrees,
+    ).toBe(0);
+    history = projectHistoryReducer(history, { type: 'redo' });
+    expect(
+      history.project.pages.get('document-1:page:3')?.rotationDeltaDegrees,
+    ).toBe(270);
+  });
+
+  it('records orientation analysis outside undo history', () => {
+    let history = projectHistoryReducer(createProjectHistoryState('project-1'), {
+      type: 'import-document',
+      document: createDocument('document-1', 1),
+    });
+    const analysis = {
+      status: 'suggestion' as const,
+      reason: 'digital-text-direction' as const,
+      targetRotationDeltaDegrees: 180,
+    };
+
+    history = projectHistoryReducer(history, {
+      type: 'record-page-orientation-analysis',
+      pageId: 'document-1:page:1',
+      analysis,
+    });
+
+    expect(
+      history.project.pages.get('document-1:page:1')?.orientationAnalysis,
+    ).toEqual(analysis);
+    expect(history.undoStack).toHaveLength(1);
   });
 });
