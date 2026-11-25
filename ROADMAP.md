@@ -1,6 +1,6 @@
 # Roadmap
 
-**Estado actual:** Etapas 0–14 completadas; Etapas 15–16 pendientes de validación y documentación final.
+**Estado actual:** Etapas 0–15 completadas en el entorno disponible; validaciones nativas/de hardware de Etapa 15 siguen pendientes. Etapa 16 en curso.
 
 | Etapa | Alcance | Estado |
 |---|---|---|
@@ -19,8 +19,8 @@
 | 12 | Guardado, autoguardado, recuperación, cuotas y migraciones | Completada y aprobada |
 | 13 | Exportación normal, estimación, validación y cancelación segura | Completada y aprobada; commit `064402b` |
 | 14 | Exportación grande, división por partes y recuperación de fallos | Completada; exportación por partes, validación individual y reintento |
-| 15 | Estrés, rendimiento, seguridad local y regresión en Chrome/Edge | Pendiente |
-| 16 | Guías finales, limitaciones, instalación y distribución | Pendiente |
+| 15 | Estrés, rendimiento, seguridad local y regresión en Chrome/Edge | Suite Chromium ejecutada; mediciones Chrome/Edge nativos y hardware pendiente |
+| 16 | Guías finales, limitaciones, instalación y distribución | En curso |
 
 ## Condición de salida por etapa
 

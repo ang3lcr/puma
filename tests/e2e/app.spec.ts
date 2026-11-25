@@ -59,6 +59,41 @@ test('initial workspace is usable and makes no external network requests', async
   expect(pageErrors).toEqual([]);
 });
 
+test('keeps hostile PDF names and metadata as text during local import', async ({ page, baseURL }) => {
+  if (!baseURL) throw new Error('Playwright baseURL must be configured.');
+  const origin = new URL(baseURL).origin;
+  const externalRequests: string[] = [];
+  const pageErrors: string[] = [];
+  await page.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    if ((url.protocol === 'http:' || url.protocol === 'https:') && url.origin !== origin) {
+      externalRequests.push(url.href);
+      await route.abort('blockedbyclient');
+      return;
+    }
+    await route.continue();
+  });
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await page.goto('/');
+  const payload = '<img src=x onerror="window.__documentStudioXss=true">';
+  const hostilePdf = await PDFDocument.create();
+  hostilePdf.addPage([100, 100]);
+  hostilePdf.setTitle(payload);
+  const bytes = await hostilePdf.save();
+  const hostileName = '<svg onload=window.__documentStudioXss=true>.pdf';
+  await page.getByLabel('Seleccionar PDF').setInputFiles({
+    name: hostileName,
+    mimeType: 'application/pdf',
+    buffer: Buffer.from(bytes),
+  });
+  await expect(page.locator('.document-properties')).toContainText(hostileName);
+  await expect(page.locator('.metadata-row').filter({ hasText: 'Título' })).toContainText(payload);
+  expect(await page.locator('.document-properties img, .document-properties svg').count()).toBe(0);
+  expect(await page.evaluate(() => (window as Window & { __documentStudioXss?: boolean }).__documentStudioXss)).toBeUndefined();
+  expect(externalRequests).toEqual([]);
+  expect(pageErrors).toEqual([]);
+});
+
 test('autosaves project edits, restores history, and relinks PDF sources', async ({
   page,
 }) => {

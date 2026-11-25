@@ -224,3 +224,21 @@ Ejecución local en Windows 10.0.26200.0 con Node 24.19.0, npm 11.17.0, Playwrig
 La prueba unitaria sustituye el adaptador de apertura PDF.js por un lector simulado, porque en Vitest el `?url` del worker se resolvió como `C:\node_modules\pdfjs-dist`. La E2E ejecuta el build real y verifica la validación de cada archivo mediante PDF.js en Chromium; pdf-lib vuelve a abrir los archivos descargados en la prueba para comprobar cantidad y CropBox. Se probaron cancelación, error y reintento con fixtures pequeños, sin construir PDFs grandes. El presupuesto de 1.5 GiB y la estimación son heurísticos, no una medición ni una garantía de memoria. Chrome/Edge nativos y el equipo de referencia no están disponibles en este entorno; las métricas de hardware siguen pendientes.
 
 La primera ejecución completa de E2E tuvo 12 aprobadas y 1 fallo porque el texto esperado en la prueba de composición quedó obsoleto tras actualizar el aviso; se corrigió la expectativa y la repetición terminó con 13/13 aprobadas. Playwright mostró la advertencia de entorno `NO_COLOR` ignorada por `FORCE_COLOR`; no afectó los resultados.
+
+## Validación de Etapa 15
+
+Ejecución en Windows 10.0.26200.0, Node 24.19.0 y npm 11.17.0. Playwright 1.65.1 ejecutó su Chromium 159.0.8154.6 (revisión de Playwright 1255). `Get-Command chrome,msedge` y las cuatro rutas de instalación estándar consultadas no encontraron Chrome ni Edge nativos. WMI denegó `Get-CimInstance`; no se pudo medir modelo de CPU, núcleos físicos, RAM ni almacenamiento. La variable de entorno reportó 12 procesadores lógicos, dato de entorno que no confirma el hardware físico ni satisface el objetivo de 4 núcleos/8 GiB.
+
+| Comando/inspección | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto |
+| `npm run lint` | Correcto |
+| `npm run test` | 13 archivos, 73 pruebas aprobadas; incluye colas/cancelación, limpieza de recursos, caché, persistencia/migraciones y errores de PDFs |
+| `npm run build` | Correcto; build de producción local |
+| `npm run test:e2e` | 14 E2E aprobadas en Chromium, incluida virtualización funcional de 1,000 páginas, CSP, cero solicitudes a otros orígenes, importación de PDF inválido, persistencia/re-vinculación, cancelación de exportación y nombres/metadatos hostiles presentados como texto |
+| Chrome/Edge nativos | No encontrados en PATH ni en las rutas estándar consultadas; regresión nativa no ejecutada |
+| Hardware de referencia | No verificable: WMI denegó acceso; no se infiere memoria ni núcleo físico |
+
+Fixtures y métodos: PDFs pequeños deterministas de 1,000 páginas, CropBox, orientación, contraseña y contenido malicioso en nombre/título; la prueba de solicitudes intercepta tráfico HTTP(S) fuera del origen durante shell/importación, y la E2E inspecciona CSP de `vite preview`. El caso hostil comprueba que nombre y metadatos se muestran como texto, no crean elementos `img`/`svg`, no ejecutan el marcador XSS y no originan solicitudes externas. Las pruebas unitarias cubren cancelación, `cleanup`/`destroy` y liberación de cachés; el código revoca las URL de descarga mediante temporizador, pero ese temporizador no se midió.
+
+La ejecución prueba regresión funcional, no es una auditoría formal de seguridad. No se midieron pico de memoria, RSS/heap/WASM, Long Tasks, latencia de importación/miniaturas ni el corpus etiquetado de clasificación/orientación. El E2E de 1,000 páginas verifica virtualización y render visible, no el umbral de 1.5 GiB. Esas métricas siguen **pendientes/no verificadas** hasta disponer de herramientas, corpus y hardware compatibles. La primera ejecución de la nueva prueba hostil falló por un selector ambiguo (`.metadata-row`); se acotó al renglón de título y la repetición pasó. Playwright siguió mostrando `NO_COLOR` ignorada por `FORCE_COLOR`.
