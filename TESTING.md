@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–10 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–11 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
 
 ## Entorno de referencia
 
@@ -173,3 +173,14 @@ Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 
 | `npm run test:e2e` | Build correcto; 9 E2E aprobadas, incluidas guías de recorte arrastrables y por teclado, undo/redo, fondo gris claro, OCR invisible, rotación, revisión y viewport móvil |
 
 El fixture E2E usa un PDF con CropBox no nativa, origen no nulo y UserUnit 2; valida las dimensiones físicas y el remapeo de márgenes al girar. El arrastre actualiza una previsualización provisional y queda como un solo cambio reversible al soltar; el teclado también ajusta los lados. La detección usa luminancia de contraste y no trata texto OCR invisible como contenido, aunque no se ha calibrado con documentos reales. Las pruebas verifican el estado del proyecto y la previsualización, no la escritura de un PDF de salida: materializar y reabrir el CropBox se reserva para la Etapa 13. El editor solo contrae el área visible que expone PDF.js; no mide ni amplía hasta MediaBox. No se validó todavía en Chrome/Edge nativos ni en el hardware de referencia.
+
+## Validación de Etapa 11
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm test` | 11 archivos, 55 pruebas aprobadas; incluye reordenamiento reversible entre fuentes y verificación de procedencia |
+| `npm run test:e2e` | Build correcto; 10 E2E aprobadas, incluida composición entre dos PDFs, posición global, undo/redo y avisos de preservación |
+
+El orden global intercalado se almacena como secuencia de páginas del proyecto, sin cambiar `documentId`, `sourcePageNumber` ni los bytes originales. Las advertencias informan que una exportación combinada puede invalidar firmas y no preservar elementos interactivos/estructurales; esta etapa aún no genera un archivo combinado. La generación y validación del PDF se reserva para la Etapa 13.

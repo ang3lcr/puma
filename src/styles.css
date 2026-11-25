@@ -905,6 +905,12 @@ main:focus-visible {
   gap: 5px;
 }
 
+.viewer-sequence-position {
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
 .viewer-page-form {
   position: relative;
   gap: 6px;
@@ -1317,6 +1323,36 @@ main:focus-visible {
   margin: 0 0 14px;
   font-size: 12px;
   font-weight: 600;
+}
+
+.combination-notice {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  color: var(--text-muted);
+  background: var(--panel-raised);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.combination-notice h3,
+.combination-notice p,
+.combination-notice ul {
+  margin: 0;
+}
+
+.combination-notice h3 {
+  color: var(--text);
+}
+
+.combination-notice ul {
+  display: grid;
+  gap: 6px;
+  padding-left: 16px;
 }
 
 .page-properties {

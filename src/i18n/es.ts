@@ -20,8 +20,9 @@ export const es = {
   },
   pages: {
     actionsHeading: 'Acciones de página',
-    moveUp: 'Mover página arriba',
-    moveDown: 'Mover página abajo',
+    moveUp: 'Mover página arriba en la combinación',
+    moveDown: 'Mover página abajo en la combinación',
+    sequencePosition: 'Posición en combinación',
     duplicate: 'Duplicar página',
     rotate: 'Girar página 90° a la derecha',
     rotateCounterclockwise: 'Girar página 90° a la izquierda',
@@ -156,6 +157,24 @@ export const es = {
     noDocumentSelected: 'Selecciona un documento para ver sus propiedades.',
     thumbnailError: 'No se pudo crear esta miniatura.',
     reopening: 'Abriendo documento para generar miniaturas…',
+  },
+  combination: {
+    region: 'Combinación y preservación',
+    heading: 'Composición combinada',
+    description:
+      'El orden global del proyecto define la secuencia del PDF combinado. Usa las flechas del visor para intercalar páginas de distintos documentos.',
+    sourceNote:
+      'Cada página conserva su archivo y número de origen; moverla solo cambia su posición en la combinación.',
+    exportNote:
+      'La composición organiza el proyecto, pero todavía no genera un PDF. La exportación se implementará en la Etapa 13.',
+    signatureWarning:
+      'La exportación combinada invalida las firmas digitales existentes.',
+    preservationWarning:
+      'No se garantiza conservar formularios interactivos, anotaciones, marcadores, capas, adjuntos ni metadatos.',
+    detectedSignatures:
+      'Se detectaron firmas digitales en {count} documentos de origen.',
+    detectedForms:
+      'Se detectaron formularios en {count} documentos; pueden perder interactividad.',
   },
   viewer: {
     region: 'Visor PDF',

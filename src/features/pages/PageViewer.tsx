@@ -42,6 +42,8 @@ interface PageViewerProps {
   cropBox: PdfBox | null;
   pageNumber: number;
   pageCount: number;
+  sequencePageNumber: number;
+  sequencePageCount: number;
   canMoveUp: boolean;
   canMoveDown: boolean;
   pageActionsDisabled: boolean;
@@ -97,6 +99,8 @@ export function PageViewer({
   cropBox,
   pageNumber,
   pageCount,
+  sequencePageNumber,
+  sequencePageCount,
   canMoveUp,
   canMoveDown,
   pageActionsDisabled,
@@ -571,6 +575,10 @@ export function PageViewer({
             pageCount={pageCount}
             onPageChange={onPageChange}
           />
+          <span className="viewer-sequence-position" aria-live="polite">
+            {es.pages.sequencePosition}: {formatNumber(sequencePageNumber)} /{' '}
+            {formatNumber(sequencePageCount)}
+          </span>
           <button
             className="viewer-control"
             type="button"

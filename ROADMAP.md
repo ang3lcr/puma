@@ -1,6 +1,6 @@
 # Roadmap
 
-**Estado actual:** Etapas 0–10 aprobadas; Etapa 11 pendiente. Cada etapa se desarrolla en una interacción, se valida y documenta, se crea su commit/tag y luego se detiene hasta recibir aprobación. No avanzar automáticamente.
+**Estado actual:** Etapas 0–10 aprobadas; Etapa 11 completada y pendiente de aprobación. Cada etapa se desarrolla en una interacción, se valida y documenta, se crea su commit/tag y luego se detiene hasta recibir aprobación. No avanzar automáticamente.
 
 | Etapa | Alcance | Estado |
 |---|---|---|
@@ -15,7 +15,7 @@
 | 8 | Detección conservadora de páginas en blanco y revisión | Completada y aprobada |
 | 9 | Sugerencias y corrección de orientación, manual y masiva | Completada y aprobada |
 | 10 | Editor de márgenes, CropBox y recorte físico explícito | Completada y aprobada |
-| 11 | Combinación de documentos y limitaciones de preservación | Pendiente |
+| 11 | Combinación de documentos y limitaciones de preservación | Completada; pendiente de aprobación |
 | 12 | Guardado, autoguardado, recuperación, cuotas y migraciones | Pendiente |
 | 13 | Exportación normal, estimación, validación y cancelación segura | Pendiente |
 | 14 | Exportación grande, división por partes y recuperación de fallos | Pendiente |

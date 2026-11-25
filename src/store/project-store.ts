@@ -303,20 +303,6 @@ export function applyProjectOperations(
 
         pageOrder.splice(currentIndex, 1);
         assertIndex(operation.toIndex, pageOrder.length);
-        const pageIndexesInDocument = pageOrder.flatMap((pageId, index) =>
-          pages.get(pageId)?.documentId === operation.documentId ? [index] : [],
-        );
-        const firstPageIndex = pageIndexesInDocument[0];
-        const lastPageIndex =
-          pageIndexesInDocument[pageIndexesInDocument.length - 1];
-        if (
-          firstPageIndex === undefined ||
-          lastPageIndex === undefined ||
-          operation.toIndex < firstPageIndex ||
-          operation.toIndex > lastPageIndex + 1
-        ) {
-          throw new Error('Pages can only be moved within their source document.');
-        }
         pageOrder.splice(operation.toIndex, 0, operation.pageId);
         break;
       }
@@ -384,10 +370,7 @@ export function createMovePageCommand(
 ): ProjectCommand {
   const page = requireActivePage(project, pageId);
   const orderedPages = getOrderedProjectPages(project);
-  const activePages = orderedPages.filter(
-    (candidate) =>
-      candidate.documentId === page.documentId && !candidate.isDeleted,
-  );
+  const activePages = orderedPages.filter((candidate) => !candidate.isDeleted);
   const currentPageNumber = activePages.findIndex(
     (candidate) => candidate.id === page.id,
   );
@@ -399,7 +382,7 @@ export function createMovePageCommand(
     throw new Error('The target page position is out of bounds.');
   }
   if (targetPageNumber - 1 === currentPageNumber) {
-    return emptyCommand('Mover página');
+    return emptyCommand('Mover página en la combinación');
   }
 
   const pageOrder = [...project.pageOrder];
@@ -417,7 +400,7 @@ export function createMovePageCommand(
     targetPageNumber - 1 < currentPageNumber ? targetIndex : targetIndex + 1;
 
   return {
-    label: 'Mover página',
+    label: 'Mover página en la combinación',
     forward: [
       {
         type: 'move-page',

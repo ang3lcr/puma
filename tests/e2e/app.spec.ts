@@ -309,6 +309,59 @@ test('crops a page by dragging a guide and supports keyboard adjustment', async 
   expect(pageErrors).toEqual([]);
 });
 
+test('composes pages across source PDFs and explains preservation limits', async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.goto('/');
+  await page.getByLabel('Seleccionar PDF').setInputFiles([
+    {
+      name: 'source-a.pdf',
+      mimeType: 'application/pdf',
+      buffer: createManyPagesPdf(2),
+    },
+    {
+      name: 'source-b.pdf',
+      mimeType: 'application/pdf',
+      buffer: createMinimalPdf(),
+    },
+  ]);
+  await expect(page.locator('.statusbar')).toContainText('3 páginas');
+  await expect(page.locator('.document-list-item')).toHaveCount(2);
+
+  const notice = page.getByRole('region', {
+    name: 'Combinación y preservación',
+  });
+  await expect(notice).toContainText(
+    'Cada página conserva su archivo y número de origen',
+  );
+  await expect(notice).toContainText(
+    'La exportación se implementará en la Etapa 13.',
+  );
+  await expect(notice).toContainText(
+    'No se garantiza conservar formularios interactivos',
+  );
+
+  const sequencePosition = page.locator('.viewer-sequence-position');
+  await expect(sequencePosition).toContainText('3 / 3');
+  await page
+    .getByRole('button', { name: 'Mover página arriba en la combinación' })
+    .click();
+  await expect(sequencePosition).toContainText('2 / 3');
+  await page.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(sequencePosition).toContainText('3 / 3');
+  await page.getByRole('button', { name: 'Rehacer' }).click();
+  await expect(sequencePosition).toContainText('2 / 3');
+
+  await page.getByRole('button', { name: /source-a\.pdf/ }).click();
+  await expect(sequencePosition).toContainText('1 / 3');
+  await page.getByRole('button', { name: 'Seleccionar página 2' }).click();
+  await expect(sequencePosition).toContainText('3 / 3');
+  expect(pageErrors).toEqual([]);
+});
+
 test('reorders, duplicates, rotates, deletes, and restores project pages', async ({
   page,
 }) => {

@@ -108,7 +108,7 @@ describe('project history', () => {
     expect(history.redoStack).toHaveLength(0);
   });
 
-  it('moves pages within their source document and restores the previous order', () => {
+  it('moves pages in the combined sequence and restores the previous order', () => {
     let history = projectHistoryReducer(createProjectHistoryState('project-1'), {
       type: 'import-document',
       document: createDocument('document-1', 3),
@@ -242,39 +242,71 @@ describe('project history', () => {
     expect(history.project.pages.get(duplicateId)?.rotationDeltaDegrees).toBe(90);
   });
 
-  it('rejects a page move across source documents without changing project state', () => {
+  it('moves pages across source documents in the combined order without changing their source', () => {
     let history = createProjectHistoryState('project-1');
     history = projectHistoryReducer(history, {
       type: 'import-document',
-      document: createDocument('document-1', 1),
+      document: createDocument('document-1', 2),
     });
     history = projectHistoryReducer(history, {
       type: 'import-document',
       document: createDocument('document-2', 1),
     });
-    const invalidMove = {
-      label: 'Mover entre documentos',
-      forward: [
-        {
-          type: 'move-page' as const,
-          pageId: 'document-1:page:1',
-          documentId: 'document-1',
-          toIndex: 1,
-        },
-      ],
-      inverse: [],
-    };
+    const originalOrder = [
+      'document-1:page:1',
+      'document-1:page:2',
+      'document-2:page:1',
+    ];
+    const command = createMovePageCommand(
+      history.project,
+      'document-2:page:1',
+      2,
+    );
+    history = projectHistoryReducer(history, { type: 'execute', command });
 
-    expect(() =>
-      projectHistoryReducer(history, {
-        type: 'execute',
-        command: invalidMove,
-      }),
-    ).toThrow('Pages can only be moved within their source document.');
     expect(history.project.pageOrder).toEqual([
       'document-1:page:1',
       'document-2:page:1',
+      'document-1:page:2',
     ]);
+    expect(history.project.pages.get('document-2:page:1')).toMatchObject({
+      documentId: 'document-2',
+      sourcePageNumber: 1,
+    });
+
+    history = projectHistoryReducer(history, { type: 'undo' });
+    expect(history.project.pageOrder).toEqual(originalOrder);
+    history = projectHistoryReducer(history, { type: 'redo' });
+    expect(history.project.pageOrder).toEqual([
+      'document-1:page:1',
+      'document-2:page:1',
+      'document-1:page:2',
+    ]);
+  });
+
+  it('rejects a move operation that misidentifies a page source', () => {
+    let history = createProjectHistoryState('project-1');
+    history = projectHistoryReducer(history, {
+      type: 'import-document',
+      document: createDocument('document-1', 1),
+    });
+    expect(() =>
+      projectHistoryReducer(history, {
+        type: 'execute',
+        command: {
+          label: 'Mover página',
+          forward: [
+            {
+              type: 'move-page',
+              pageId: 'document-1:page:1',
+              documentId: 'not-the-source',
+              toIndex: 0,
+            },
+          ],
+          inverse: [],
+        },
+      }),
+    ).toThrow('Page "document-1:page:1" cannot be moved.');
   });
 
   it('records blank analysis outside undo history and keeps review decisions reversible', () => {

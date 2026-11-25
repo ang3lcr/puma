@@ -1,5 +1,12 @@
 # Changelog
 
+## Etapa 11
+
+- Habilitado el reordenamiento global reversible de páginas entre documentos fuente para formar una secuencia combinada; la procedencia y el número de origen de cada página se conservan.
+- El visor muestra la posición global de la página, y sus controles de movimiento pueden intercalar páginas de distintos PDFs.
+- Añadidos avisos sobre firmas digitales, formularios y elementos que no se garantizan preservar. La composición actual solo prepara el proyecto; todavía no crea el PDF de salida.
+- Validación: typecheck y lint correctos; 11 archivos de pruebas unitarias/componentes y 55 pruebas aprobadas; build correcto; 10 E2E aprobadas.
+
 ## Etapa 10
 
 - Añadido editor de márgenes físicos en milímetros que crea una CropBox por página, considerando UserUnit y la orientación cardinal efectiva. La caja se limita a la caja visible original de PDF.js; se puede restaurar con un comando reversible.

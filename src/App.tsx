@@ -94,6 +94,7 @@ function App() {
   );
   const documents = getOrderedProjectDocuments(projectHistory.project);
   const projectPages = getOrderedProjectPages(projectHistory.project);
+  const activeProjectPages = projectPages.filter((page) => !page.isDeleted);
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [activePageInfo, setActivePageInfo] = useState<
@@ -152,6 +153,9 @@ function App() {
   const activePageNumber = activePageIndex + 1;
   const currentProjectPage =
     activePageIndex >= 0 ? activeDocumentPages[activePageIndex] : null;
+  const sequencePageNumber =
+    activeProjectPages.findIndex((page) => page.id === currentProjectPage?.id) +
+    1;
   const activeSession =
     activePdfSession?.documentId === activeDocumentId
       ? activePdfSession.session
@@ -174,7 +178,7 @@ function App() {
   );
   const currentPageInfo =
     activePageInfo?.pageId === currentProjectPage?.id ? activePageInfo : null;
-  const totalPages = projectPages.filter((page) => !page.isDeleted).length;
+  const totalPages = activeProjectPages.length;
   const updatePageInfo = useCallback(
     (pageId: string, info: PageInfo): void => {
       setActivePageInfo({ ...info, pageId });
@@ -229,7 +233,7 @@ function App() {
       command: createMovePageCommand(
         projectHistory.project,
         currentProjectPage.id,
-        activePageNumber + (direction === 'up' ? -1 : 1),
+        sequencePageNumber + (direction === 'up' ? -1 : 1),
       ),
     });
   }
@@ -1323,8 +1327,10 @@ function App() {
                 cropBox={currentProjectPage.cropBox}
                 pageNumber={activePageNumber}
                 pageCount={activeDocumentPages.length}
-                canMoveUp={activePageNumber > 1}
-                canMoveDown={activePageNumber < activeDocumentPages.length}
+                sequencePageNumber={sequencePageNumber}
+                sequencePageCount={totalPages}
+                canMoveUp={sequencePageNumber > 1}
+                canMoveDown={sequencePageNumber < totalPages}
                 pageActionsDisabled={isPageAnalysisRunning}
                 onPageChange={(pageNumber) =>
                   setActivePageId(activeDocumentPages[pageNumber - 1]?.id ?? null)
@@ -1389,6 +1395,50 @@ function App() {
           {activeDocument ? (
             <div className="document-properties">
               <h3>{es.properties.documentHeading}</h3>
+             {documents.length > 1 && (
+               <section
+                 className="combination-notice"
+                 aria-label={es.combination.region}
+               >
+                 <h3>{es.combination.heading}</h3>
+                 <p>{es.combination.description}</p>
+                 <p>{es.combination.sourceNote}</p>
+                 <ul>
+                   <li>{es.combination.signatureWarning}</li>
+                   <li>{es.combination.preservationWarning}</li>
+                   <li>{es.combination.exportNote}</li>
+                   {documents.some(
+                     (document) => document.metadata.hasSignatures,
+                   ) && (
+                     <li>
+                       {es.combination.detectedSignatures.replace(
+                         '{count}',
+                         formatNumber(
+                           documents.filter(
+                             (document) =>
+                               document.metadata.hasSignatures,
+                           ).length,
+                         ),
+                       )}
+                     </li>
+                   )}
+                   {documents.some(
+                     (document) => document.metadata.hasForms,
+                   ) && (
+                     <li>
+                       {es.combination.detectedForms.replace(
+                         '{count}',
+                         formatNumber(
+                           documents.filter(
+                             (document) => document.metadata.hasForms,
+                           ).length,
+                         ),
+                       )}
+                     </li>
+                   )}
+                 </ul>
+               </section>
+             )}
               <dl>
                 {metadataRows.map(([label, value]) => (
                   <div className="metadata-row" key={label}>
