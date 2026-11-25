@@ -1,6 +1,6 @@
 # ADR 0001 — Presupuesto y plan B para PDF grandes
 
-- **Estado:** propuesta de Etapa 0; pendiente de aprobación.
+- **Estado:** aprobado en Etapa 0; implementación/validación pendiente.
 - **Fecha:** 2026-11-25.
 
 ## Contexto

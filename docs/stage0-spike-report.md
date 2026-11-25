@@ -1,7 +1,7 @@
 # Informe de Etapa 0 — análisis y spikes
 
 **Fecha:** 2026-11-25  
-**Estado:** documentación y pruebas técnicas preliminares listas para revisión; falta aprobar hardware, umbrales y decisiones antes de la Etapa 1.
+**Estado:** Etapa 0 aprobada. Se inició Etapa 1; la validación del hardware de rendimiento sigue pendiente.
 
 ## 1. Entorno inspeccionado
 
@@ -101,7 +101,7 @@ ADRs propuestos:
 - [0004 — sugerencias de orientación](./adr/0004-orientation-suggestions.md)
 - [0005 — lectura PDF.js por rangos](./adr/0005-pdfjs-local-range-transport.md)
 
-## 9. Trabajo pendiente y aprobación
+## 9. Validación de rendimiento pendiente
 
 - Ejecutar los mismos tests en Chrome y Edge estables y en el hardware aprobado de 4 núcleos/8 GB o en el hardware de referencia que indique el usuario.
 - Probar PDFs reales/sintéticos con imágenes grandes, texto seleccionable, mezcla de ambos, páginas rotadas, cifrado, formularios, anotaciones, firmas y xref no trivial.
@@ -109,4 +109,4 @@ ADRs propuestos:
 - Validar las dependencias propuestas en un proyecto inicial real y generar avisos desde lockfile.
 - Confirmar qué sucede con PDFs que restringen copia/modificación y aprobar el presupuesto/método de exportación por partes.
 
-No se ejecutaron scripts de lint, typecheck, unit, build ni E2E: no existe proyecto inicial y la Etapa 0 no debe implementarlo. El trabajo está listo para revisión; la siguiente etapa requiere aprobación expresa.
+No se ejecutaron scripts de lint, typecheck, unit, build ni E2E durante Etapa 0: no existía proyecto inicial y esa etapa no debía implementarlo. El diseño y los criterios fueron aprobados; el reporte se conserva como evidencia de los spikes.

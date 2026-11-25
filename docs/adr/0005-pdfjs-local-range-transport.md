@@ -1,6 +1,6 @@
 # ADR 0005 — Lectura local por rangos con PDF.js
 
-- **Estado:** propuesta de Etapa 0; pendiente de aprobación.
+- **Estado:** aprobado en Etapa 0; implementación/validación pendiente.
 - **Fecha:** 2026-11-25.
 
 ## Contexto

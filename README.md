@@ -4,7 +4,7 @@ Document Studio es una aplicación de escritorio web, local y sin backend para r
 
 ## Estado
 
-**Etapa 0: análisis y spikes técnicos, lista para revisión.** Este workspace estaba vacío. Se han añadido únicamente documentación y decisiones propuestas; todavía no hay aplicación ni dependencias de proyecto. La Etapa 1 no comenzará hasta aprobar esta propuesta.
+**Etapa 1 completada, pendiente de aprobación.** Base React + TypeScript estricto, herramientas de calidad y shell inicial de escritorio. La importación de PDF todavía no está implementada; corresponde a la Etapa 2.
 
 ## Revisión
 
@@ -23,6 +23,30 @@ Document Studio es una aplicación de escritorio web, local y sin backend para r
 - Una detección de baja confianza requiere revisión. Nunca se eliminan páginas automáticamente.
 - Si no es seguro generar un único PDF grande, se informa y se ofrecen partes válidas en lugar de producir un archivo incompleto.
 
-## Próximo paso
+## Desarrollo local
 
-Revisar y aprobar o ajustar las decisiones, el hardware de referencia y los criterios propuestos en el informe. Tras la aprobación se iniciará únicamente la Etapa 1.
+Requiere Node.js compatible con Vite 8 (20.19+ o 22.12+).
+
+```powershell
+npm install
+npx playwright install chromium
+npm run dev
+```
+
+Instalar Chromium una sola vez es necesario para ejecutar la suite E2E.
+
+Scripts de validación:
+
+```powershell
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run test:e2e
+```
+
+La suite E2E usa Playwright Chromium y prueba el build de producción mediante `vite preview`. Para un hosting estático, `public/_headers` define las cabeceras CSP y de seguridad en proveedores que soportan ese formato; en otros hostings hay que configurar las mismas cabeceras HTTP. El servidor de desarrollo permite recursos inline/blob solo para React Fast Refresh y HMR de Vite; preview y producción no permiten `unsafe-inline` ni Workers `blob:`.
+
+## Alcance de esta etapa
+
+El diseño y las decisiones de la Etapa 0 fueron aprobados. Se conservan el objetivo de prueba de 4 núcleos/8 GiB y los umbrales de [TESTING.md](./TESTING.md), que todavía deben validarse en Chrome/Edge cuando ese hardware/navegador esté disponible. La Etapa 1 no inicia importación, análisis, manipulación ni exportación de PDF.

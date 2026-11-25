@@ -1,6 +1,6 @@
 # Arquitectura propuesta
 
-**Estado:** propuesta de Etapa 0; pendiente de aprobación. La aplicación aún no está implementada.
+**Estado:** base aprobada en Etapa 0. La shell inicial se implementa en Etapa 1; las funciones PDF siguen pendientes de sus etapas respectivas.
 
 ## Alcance técnico
 
@@ -69,7 +69,7 @@ La lista larga se virtualiza; se renderizan miniaturas bajo demanda y como máxi
 
 ## Seguridad, privacidad y compatibilidad
 
-- CSP estricta servida también como cabecera HTTP: recursos solo del mismo origen, sin CDN, telemetría, `eval` o `object-src`; permitir únicamente los esquemas locales imprescindibles para PDF/Workers después de validarlos. Usar rutas locales de Worker, no un `blob:` por defecto.
+- CSP estricta servida también como cabecera HTTP: recursos solo del mismo origen, sin CDN, telemetría, `eval` o `object-src`; permitir únicamente los esquemas locales imprescindibles para PDF/Workers después de validarlos. La política de desarrollo permite scripts/estilos inline y Workers `blob:` solo para React Fast Refresh/HMR de Vite; preview y hosting de producción no permiten `unsafe-inline` ni `blob:` para Workers. Usar rutas locales de Worker.
 - PDF.js se configura con `isEvalSupported: false`. No se ejecutan acciones ni JavaScript del PDF; se informa de la presencia de características no conservadas.
 - Escapar nombres, metadatos y mensajes procedentes de PDF. No insertar HTML proporcionado por documentos.
 - La File System Access API es específica de Chromium. Si no está disponible, pedir que se vuelva a seleccionar la fuente después de recargar. OPFS e IndexedDB están sujetos a cuota y evicción; consultar `navigator.storage.estimate()` y manejar errores explícitamente.

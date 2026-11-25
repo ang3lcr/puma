@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios para revisión de Etapa 0. No hay todavía una aplicación ni scripts de proyecto.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; medición en el hardware Chrome/Edge de referencia aún pendiente. Validaciones de Etapa 1 ejecutadas.
 
 ## Entorno de referencia
 
@@ -23,7 +23,7 @@ El equipo medido para los spikes fue diferente: AMD Ryzen 5 2600X (6 núcleos/12
 | Exportación | Reabrir cada salida con PDF.js; comprobar páginas, orden, rotaciones, CropBox y texto seleccionable en páginas no rasterizadas. Nunca presentar una salida parcial como válida. |
 | Privacidad | E2E del flujo principal falla si se solicita cualquier recurso a un dominio externo. Registrar también solicitudes fallidas. |
 
-Los umbrales de orientación, memoria y hardware deben aprobarse antes de convertirse en criterios definitivos. El spike actual no valida el clasificador de páginas en blanco ni estos umbrales de producto.
+Se aprobó conservar los umbrales propuestos y el objetivo de hardware (4 núcleos/8 GiB). El equipo local no es equivalente y no se encontró Chrome/Edge nativo, por lo que las métricas no se declaran cumplidas. El spike no valida el clasificador de páginas en blanco.
 
 ## Matriz de pruebas prevista
 
@@ -33,6 +33,18 @@ Los umbrales de orientación, memoria y hardware deben aprobarse antes de conver
 - **Fixtures:** PDFs creados con semilla fija; páginas digitales, escaneadas y mixtas; rotaciones nativas, dimensiones variadas, página vacía, ruido, sello, firma, bordes, cifrado y texto pequeño. Los fixtures grandes se generan bajo demanda y no se suben al repositorio.
 - **Estrés/perfil:** 500 y 1,000 páginas, desplazamiento rápido, caché, renderizado concurrente, cancelación y duración prolongada. Guardar hardware, navegador, versión de fixture y medidas.
 
-## Validación efectuada en Etapa 0
+## Validación de Etapa 1
 
-Se ejecutaron spikes puntuales de Node y Chromium integrado, detallados en [el informe](./docs/stage0-spike-report.md). No se ejecutaron `npm run typecheck`, `lint`, `test`, `build` o E2E: no existe aún manifiesto ni aplicación, y la Etapa 0 prohíbe implementarlos. No declarar esos comandos como exitosos.
+Los spikes de Etapa 0 están detallados en [el informe](./docs/stage0-spike-report.md). Ejecución realizada en Windows 11 con Node 24.19.0, npm 11.17.0, Playwright 1.65.1 y su Chromium 159.0.8154.6:
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm run test` | 1 archivo, 2 pruebas aprobadas |
+| `npm run build` | Correcto; Vite 8.3.8, 18 módulos, JS 224.80 kB / 70.05 kB gzip y CSS 7.92 kB / 2.27 kB gzip |
+| `npm run test:e2e` | 1 E2E aprobada: shell, CSP de producción, tema y cero solicitudes HTTP(S) a otros orígenes |
+
+También se inspeccionó la vista con el Chromium integrado de VS Code/Electron: anchos de 1440 px y 390 px, sin desbordamiento horizontal; el panel de propiedades se mantiene visible en móvil. Estos navegadores Chromium no sustituyen el smoke test pendiente en instalaciones nativas de Chrome y Edge estables sobre el hardware de referencia.
+
+El servidor dev también se probó en Chromium integrado 150.0.7871.250/Electron 43.8.6: respuesta 200, CSS aplicado y ningún error de consola o de página. Su CSP relaja scripts/estilos inline y Workers `blob:` únicamente para React Fast Refresh/HMR; la prueba E2E confirma que la política de preview no tiene esas excepciones.

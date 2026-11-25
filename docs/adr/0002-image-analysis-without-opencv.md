@@ -1,6 +1,6 @@
 # ADR 0002 — Operaciones de imagen iniciales
 
-- **Estado:** propuesta de Etapa 0; pendiente de aprobación.
+- **Estado:** aprobado en Etapa 0; implementación/validación pendiente.
 - **Fecha:** 2026-11-25.
 
 ## Contexto
