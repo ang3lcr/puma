@@ -1,6 +1,6 @@
 # Arquitectura propuesta
 
-**Estado:** arquitectura base aprobada en Etapa 0; shell aprobada en Etapa 1; importación local y metadatos implementados en Etapa 2. Miniaturas, edición, persistencia de proyecto y exportación siguen pendientes de sus etapas.
+**Estado:** arquitectura base aprobada en Etapa 0; shell aprobada en Etapa 1; importación local y metadatos aprobados en Etapa 2; miniaturas virtualizadas implementadas en Etapa 3. Edición, persistencia de proyecto y exportación siguen pendientes de sus etapas.
 
 ## Alcance técnico
 
@@ -49,7 +49,7 @@ docs/
   adr/
 ```
 
-La lista larga se virtualiza; se renderizan miniaturas bajo demanda y como máximo tres páginas en alta resolución. La caché LRU tiene límite explícito de bytes, no solo de entradas. Al descartar páginas se llaman `page.cleanup()`, `PDFDocumentProxy.destroy()`, `ImageBitmap.close()` y `URL.revokeObjectURL()` cuando corresponda.
+La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniaturas bajo demanda al entrar en la ventana visible y se cancelan al salir. La caché LRU mantiene hasta 64 MiB de `ImageBitmap`, contabilizados a 4 bytes por píxel, y cierra los recursos al expulsarlos o desmontar la aplicación. Al desmontar una miniatura se cancela el renderizado y se llama `page.cleanup()`; al cambiar de documento se destruye el `PDFDocumentLoadingTask` anterior. El visor de alta resolución y sus límites de concurrencia pertenecen a etapas posteriores.
 
 ## Modelo de dominio
 
@@ -60,8 +60,8 @@ La lista larga se virtualiza; se renderizan miniaturas bajo demanda y como máxi
 
 ## Flujo de datos
 
-1. Importar uno o varios archivos sin alterar el original. PDF.js lee rangos y obtiene metadatos; el conteo de páginas no requiere renderizar todas las páginas.
-2. Renderizar únicamente la página seleccionada o las miniaturas próximas al viewport. Texto digital se conserva como texto; imágenes y páginas mixtas no se rasterizan para analizarlas.
+1. Importar uno o varios archivos sin alterar el original. PDF.js lee rangos y obtiene metadatos; el conteo de páginas no requiere renderizar todas las páginas. Solo se conserva abierta la sesión PDF del documento activo; al cambiar de documento se libera y el seleccionado se reabre desde su `File`.
+2. Renderizar miniaturas únicamente para las páginas próximas al viewport. Texto digital se conserva como texto; imágenes y páginas mixtas no se rasterizan para analizarlas.
 3. Procesar imágenes de resolución reducida en Worker con un límite de concurrencia, cancelación, prioridades y mensajes tipados. Transferir buffers cuando sea seguro para evitar copias.
 4. Registrar sugerencias de análisis sin modificar el contenido. Ante baja confianza, marcar «Requiere revisión».
 5. Aplicar acciones del usuario al modelo mediante comandos reversibles.
@@ -71,7 +71,7 @@ La lista larga se virtualiza; se renderizan miniaturas bajo demanda y como máxi
 
 - CSP estricta servida también como cabecera HTTP: recursos solo del mismo origen, sin CDN, telemetría, `eval` o `object-src`; permitir únicamente los esquemas locales imprescindibles para PDF/Workers después de validarlos. La política de desarrollo permite scripts/estilos inline y Workers `blob:` solo para React Fast Refresh/HMR de Vite; preview y hosting de producción no permiten `unsafe-inline` ni `blob:` para Workers. Usar rutas locales de Worker.
 - La versión integrada de PDF.js no expone `isEvalSupported` en su API. Se usa sin el Viewer ni el gestor de scripting; la comprobación del bundle fijado no encontró llamadas a `eval()` ni `new Function()`. No se ejecutan acciones ni JavaScript del PDF.
-- La importación retiene el `File` durante la sesión, sin copiar el archivo a IndexedDB. El `PDFDocumentLoadingTask` se destruye tras leer metadatos; la Etapa 3 volverá a abrir la fuente para renderizar bajo demanda. La fuente se debe volver a seleccionar tras recargar; la persistencia de handles se implementará con el almacenamiento del proyecto.
+- La importación retiene el `File` durante la sesión, sin copiar el archivo a IndexedDB. La etapa activa conserva su `PDFDocumentLoadingTask` para miniaturas y lo destruye al cambiar de documento o desmontar la aplicación. Las miniaturas se limitan a una caché de 64 MiB y el renderizado se cancela al salir de la ventana virtual. La fuente se debe volver a seleccionar tras recargar; la persistencia de handles se implementará con el almacenamiento del proyecto.
 - Escapar nombres, metadatos y mensajes procedentes de PDF. No insertar HTML proporcionado por documentos.
 - La File System Access API es específica de Chromium. Si no está disponible, pedir que se vuelva a seleccionar la fuente después de recargar. OPFS e IndexedDB están sujetos a cuota y evicción; consultar `navigator.storage.estimate()` y manejar errores explícitamente.
 - Las firmas digitales dejan de ser válidas tras modificar o combinar el PDF. Formularios, anotaciones, marcadores, capas, adjuntos, etiquetas y restricciones de permisos se evalúan y documentan antes de exportar; no prometer preservación no comprobada.

@@ -1,7 +1,7 @@
 Document Studio — avisos de terceros
 Fecha de revisión: 2026-11-25
 
-Las dependencias activas de Etapas 1 y 2 se fijan en package-lock.json. Los archivos
+Las dependencias activas de Etapas 1–3 se fijan en package-lock.json. Los archivos
 de licencia/NOTICE de cada paquete deben conservarse al distribuir. La lista
 incluye también transitivas relevantes revisadas; no es una auditoría legal.
 
@@ -14,6 +14,7 @@ PDF.js (pdfjs-dist)            6.5.438       Apache-2.0
 TypeScript                     6.0.3         Apache-2.0
 Vite                           8.3.8         MIT
 @vitejs/plugin-react           6.3.0         MIT
+@tanstack/react-virtual        3.14.28      MIT
 Vitest                         5.1.1         MIT
 Testing Library React          16.3.3        MIT
 Testing Library User Event     14.6.13       MIT
@@ -34,9 +35,6 @@ Paquetes usados solo en spikes de Etapa 0, no instalados en la app:
 
 pdf-lib                        1.17.1        MIT (Etapa 0 spike)
 
-Candidatos futuros/opcionales, no instalados como dependencias:
-
-@tanstack/react-virtual        3.14.28         MIT
 @techstark/opencv-js           5.0.0-release.1 Apache-2.0
 tesseract.js                   7.0.0           Apache-2.0
 tesseract.js-core              7.0.0           Apache-2.0

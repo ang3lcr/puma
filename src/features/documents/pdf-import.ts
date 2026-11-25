@@ -13,12 +13,14 @@ import {
 import { PdfImportError, sanitizeText } from './pdf-import-error';
 import type {
   ImportedPdf,
+  PdfDocumentSession,
   PdfImportOptions,
   PdfMetadata,
 } from './pdf-import-types';
 export { PdfImportError } from './pdf-import-error';
 export type {
   ImportedPdf,
+  PdfDocumentSession,
   PdfImportOptions,
   PdfImportProgress,
   PdfMetadata,
@@ -33,6 +35,31 @@ export async function importPdfFile(
   file: File,
   options: PdfImportOptions,
 ): Promise<ImportedPdf> {
+  const session = await openPdfDocument(file, options);
+
+  try {
+    const { info } = await session.document.getMetadata();
+    return {
+      id: crypto.randomUUID(),
+      file,
+      fileName: sanitizeText(file.name, 255) ?? 'documento.pdf',
+      size: file.size,
+      lastModified: file.lastModified,
+      pageCount: session.document.numPages,
+      fingerprint: session.document.fingerprints[0] ?? null,
+      metadata: extractPdfMetadata(info, session.document.isPureXfa),
+      session,
+    };
+  } catch (error) {
+    await session.loadingTask.destroy();
+    throw new PdfImportError('read-failed', { cause: error });
+  }
+}
+
+export async function openPdfDocument(
+  file: File,
+  options: PdfImportOptions,
+): Promise<PdfDocumentSession> {
   if (file.size === 0) {
     throw new PdfImportError('empty-file');
   }
@@ -132,24 +159,12 @@ export async function importPdfFile(
   };
 
   try {
-    const document = await loadingTask.promise;
-    const { info } = await document.getMetadata();
-    const metadata = extractPdfMetadata(info, document.isPureXfa);
-    await loadingTask.destroy();
-
     return {
-      id: crypto.randomUUID(),
-      file,
-      fileName: sanitizeText(file.name, 255) ?? 'documento.pdf',
-      size: file.size,
-      lastModified: file.lastModified,
-      pageCount: document.numPages,
-      fingerprint: document.fingerprints[0] ?? null,
-      metadata,
+      document: await loadingTask.promise,
+      loadingTask,
     };
   } catch (error) {
     await loadingTask.destroy();
-
     if (taskState.passwordCancelled) {
       throw new PdfImportError('password-cancelled', { cause: error });
     }

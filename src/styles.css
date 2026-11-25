@@ -318,7 +318,84 @@ main:focus-visible {
 }
 
 .thumbnail-section {
+  display: flex;
+  min-height: 0;
   flex: 1;
+  flex-direction: column;
+}
+
+.thumbnail-scroll {
+  flex: 1;
+  width: 100%;
+  min-height: 160px;
+  height: min(54vh, 500px);
+  max-height: calc(100vh - 340px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--border) transparent;
+}
+
+.thumbnail-virtual-list {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thumbnail-virtual-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: 5px 0;
+}
+
+.thumbnail-card {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+}
+
+.thumbnail-image {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: var(--canvas);
+}
+
+.thumbnail-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.thumbnail-canvas.has-error {
+  opacity: 0.2;
+}
+
+.thumbnail-error {
+  position: absolute;
+  padding: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.thumbnail-card figcaption {
+  min-height: 16px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.4;
 }
 
 .thumbnail-empty {
@@ -806,6 +883,12 @@ main:focus-visible {
 
   .thumbnail-empty {
     min-height: 80px;
+  }
+
+  .thumbnail-scroll {
+    min-height: 120px;
+    height: 150px;
+    max-height: 150px;
   }
 
   .workspace {

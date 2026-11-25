@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1 y 2 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–3 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
 
 ## Entorno de referencia
 
@@ -64,3 +64,17 @@ Ejecución en Windows 11 con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwrig
 La suite comprueba que no hay solicitudes HTTP(S) a otros orígenes durante la shell y la importación normal. También verifica el layout con un viewport de 390 px, sin desbordamiento horizontal y con los metadatos visibles. El módulo PDF.js se divide en un chunk que solo se solicita tras iniciar una importación; Worker y chunk se sirven desde el mismo origen.
 
 La confirmación de lectura extensa se activa para fuentes de al menos 400 MiB cuando la unión de rangos solicitados alcanza el 95 % del archivo. Se prueba la confirmación/rechazo con blobs pequeños usando un umbral de prueba; las mediciones de memoria y tiempo con PDFs grandes, Chrome/Edge nativos y hardware de 4 núcleos/8 GiB siguen pendientes.
+
+## Validación de Etapa 3
+
+Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, `@tanstack/react-virtual` 3.14.28, Playwright 1.65.1 y Chromium 159.0.8154.6:
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm run test` | 3 archivos, 10 pruebas aprobadas; incluye caché LRU y límite por bytes |
+| `npm run build` | Correcto; shell JS 276.86 kB / 85.51 kB gzip; módulo PDF.js diferido 447.46 kB / 134.94 kB gzip; Worker local 1,271.91 kB |
+| `npm run test:e2e` | 4 E2E aprobadas: CSP/shell, importación/metadatos/error y reapertura al cambiar de documento, PDF de 1.000 páginas con virtualización y render, contraseña/cancelación |
+
+La E2E de 1.000 páginas confirma que el número de filas DOM se mantiene por debajo de 12, que se renderiza una miniatura visible y que el desplazamiento al final llega a la página 1.000. Esta prueba funcional no mide tiempos de render, memoria máxima ni cumplimiento de los umbrales de rendimiento: las mediciones en Chrome/Edge nativos y hardware de referencia continúan pendientes.

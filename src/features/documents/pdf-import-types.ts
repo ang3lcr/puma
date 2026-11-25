@@ -1,3 +1,5 @@
+import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist';
+
 export type PasswordReason = 'required' | 'incorrect';
 
 export interface PdfMetadata {
@@ -23,6 +25,12 @@ export interface ImportedPdf {
   pageCount: number;
   fingerprint: string | null;
   metadata: PdfMetadata;
+  session: PdfDocumentSession;
+}
+
+export interface PdfDocumentSession {
+  document: PDFDocumentProxy;
+  loadingTask: PDFDocumentLoadingTask;
 }
 
 export interface PdfImportProgress {

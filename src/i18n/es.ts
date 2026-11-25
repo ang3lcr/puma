@@ -35,8 +35,11 @@ export const es = {
     },
     pagesHeading: 'Miniaturas',
     pageCountLabel: 'páginas',
+    pageLabel: 'Página',
     emptyPages: 'Las páginas aparecerán aquí',
     noDocumentSelected: 'Selecciona un documento para ver sus propiedades.',
+    thumbnailError: 'No se pudo crear esta miniatura.',
+    reopening: 'Abriendo documento para generar miniaturas…',
   },
   password: {
     title: 'PDF protegido',
@@ -63,7 +66,7 @@ export const es = {
     emptyDescription:
       'Selecciona uno o varios archivos PDF, o arrástralos a esta área.',
     nextStage: 'La lectura es local; tus archivos originales no se modifican.',
-    loading: 'Leyendo metadatos y número de páginas…',
+    loading: 'Abriendo documento PDF…',
     activeDocument: 'Documento cargado',
     importProgress: 'Progreso de lectura',
   },

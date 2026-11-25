@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { createMinimalPdf } from '../fixtures/minimal-pdf';
+import { createManyPagesPdf } from '../fixtures/many-pages-pdf';
 import { createPasswordProtectedPdf } from '../fixtures/password-protected-pdf';
 
 test('initial workspace is usable and makes no external network requests', async ({
@@ -91,6 +92,14 @@ test('imports PDF metadata locally and reports invalid PDF files', async ({
   await expect(page.getByText('Fixture document')).toBeVisible();
   await expect(page.getByText('Local test')).toBeVisible();
   await expect(page.getByRole('status')).toContainText('1 páginas');
+  await expect(page.locator('canvas[aria-label="Página 1"]')).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator('canvas[aria-label="Página 1"]')
+        .evaluate((canvas: HTMLCanvasElement) => canvas.width > 0),
+    )
+    .toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('heading', { name: 'Metadatos del documento' })).toBeVisible();
   expect(
@@ -109,6 +118,70 @@ test('imports PDF metadata locally and reports invalid PDF files', async ({
   );
   await expect(page.getByRole('heading', { name: 'local.pdf' })).toBeVisible();
 
+  await page.getByLabel('Seleccionar PDF').setInputFiles({
+    name: 'second.pdf',
+    mimeType: 'application/pdf',
+    buffer: createMinimalPdf(),
+  });
+  await expect(page.getByRole('heading', { name: 'second.pdf' })).toBeVisible();
+  await page.locator('.document-list-item').first().click();
+  await expect(page.getByRole('heading', { name: 'local.pdf' })).toBeVisible();
+  await expect(page.locator('canvas[aria-label="Página 1"]')).toBeVisible();
+
+  expect(externalRequests).toEqual([]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('virtualizes long documents and renders thumbnails on demand', async ({
+  page,
+  baseURL,
+}) => {
+  if (!baseURL) {
+    throw new Error('Playwright baseURL must be configured.');
+  }
+
+  const applicationOrigin = new URL(baseURL).origin;
+  const externalRequests: string[] = [];
+  const pageErrors: string[] = [];
+  await page.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    if (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      url.origin !== applicationOrigin
+    ) {
+      externalRequests.push(url.href);
+      await route.abort('blockedbyclient');
+      return;
+    }
+
+    await route.continue();
+  });
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.goto('/');
+  await page.getByLabel('Seleccionar PDF').setInputFiles({
+    name: 'many-pages.pdf',
+    mimeType: 'application/pdf',
+    buffer: createManyPagesPdf(1000),
+  });
+
+  await expect(page.getByRole('status')).toContainText('1000 páginas');
+  await expect(page.locator('canvas[aria-label="Página 1"]')).toBeVisible();
+  expect(await page.locator('.thumbnail-virtual-row').count()).toBeLessThan(12);
+
+  await page
+    .locator('.thumbnail-scroll')
+    .evaluate((element: HTMLDivElement) => {
+      element.scrollTop = element.scrollHeight;
+    });
+  const lastThumbnail = page.locator('canvas[aria-label="Página 1000"]');
+  await expect(lastThumbnail).toBeVisible();
+  await expect
+    .poll(() =>
+      lastThumbnail.evaluate((canvas: HTMLCanvasElement) => canvas.width > 0),
+    )
+    .toBe(true);
+  expect(await page.locator('.thumbnail-virtual-row').count()).toBeLessThan(12);
   expect(externalRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
 });

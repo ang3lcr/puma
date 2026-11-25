@@ -1,6 +1,6 @@
 # ADR 0003 — Referencias a fuentes y persistencia local
 
-- **Estado:** aprobado en Etapa 0; referencia `File` de sesión implementada en Etapa 2; persistencia pendiente de la Etapa 12.
+- **Estado:** aprobado en Etapa 0; referencia `File` de sesión implementada en Etapa 2 y reutilizada para reabrir el PDF activo en Etapa 3; persistencia pendiente de la Etapa 12.
 - **Fecha:** 2026-11-25.
 
 ## Contexto
@@ -21,6 +21,6 @@ Guardar metadatos, historial delta y referencias en IndexedDB. Preferir un handl
 ## Consecuencias
 
 - Documentar claramente cuándo el usuario debe relocalizar el original.
-- La Etapa 2 retiene el objeto `File` solo en memoria y destruye el `PDFDocumentLoadingTask` tras leer metadatos; todavía no guarda handles o bytes en IndexedDB.
+- La aplicación retiene los objetos `File` solo en memoria. Tras leer metadatos conserva abierta la sesión PDF del documento activo para renderizar miniaturas; al cambiar de documento destruye la sesión anterior y vuelve a abrir el seleccionado desde el mismo `File`. No se guardan handles ni bytes en IndexedDB.
 - Detectar cuota y manejar rechazos; la estimación no garantiza la reserva.
 - File System Access es una decisión de plataforma Chromium, documentada como tal.

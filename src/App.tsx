@@ -6,13 +6,17 @@ import {
 } from './features/documents/pdf-import-error';
 import {
   type ImportedPdf,
+  type PdfDocumentSession,
   type PasswordReason,
   type PdfImportProgress,
 } from './features/documents/pdf-import-types';
+import { ThumbnailList } from './features/pages/ThumbnailList';
+import { ByteLruCache } from './features/pages/thumbnail-cache';
 import { es } from './i18n/es';
 import { formatBytes, formatNumber } from './i18n/format';
 
 type Theme = 'dark' | 'light';
+type DocumentRecord = Omit<ImportedPdf, 'session'>;
 
 interface ImportFailure {
   fileName: string;
@@ -35,11 +39,19 @@ interface FullReadRequest {
   resolve: (confirmed: boolean) => void;
 }
 
+interface ActivePdfSession {
+  documentId: string;
+  session: PdfDocumentSession;
+}
+
 function App() {
   const [theme, setTheme] = useState<Theme>('dark');
-  const [documents, setDocuments] = useState<ImportedPdf[]>([]);
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [isOpeningDocument, setIsOpeningDocument] = useState(false);
+  const [activePdfSession, setActivePdfSession] =
+    useState<ActivePdfSession | null>(null);
   const [progress, setProgress] = useState<ImportProgressState | null>(null);
   const [importFailures, setImportFailures] = useState<ImportFailure[]>([]);
   const [passwordRequest, setPasswordRequest] =
@@ -47,15 +59,28 @@ function App() {
   const [fullReadRequest, setFullReadRequest] =
     useState<FullReadRequest | null>(null);
   const [password, setPassword] = useState('');
+  const [thumbnailCache] = useState(
+    () =>
+      new ByteLruCache<string, ImageBitmap>(
+        64 * 1024 * 1024,
+        (bitmap) => bitmap.width * bitmap.height * 4,
+        (bitmap) => bitmap.close(),
+      ),
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const passwordDialogRef = useRef<HTMLDivElement>(null);
   const fullReadDialogRef = useRef<HTMLDivElement>(null);
   const importRunning = useRef(false);
   const isDark = theme === 'dark';
+  const isLoadingDocument = isImporting || isOpeningDocument;
   const activeDocument = documents.find(
     (document) => document.id === activeDocumentId,
   );
+  const activeSession =
+    activePdfSession?.documentId === activeDocumentId
+      ? activePdfSession.session
+      : null;
   const totalPages = documents.reduce(
     (count, document) => count + document.pageCount,
     0,
@@ -74,6 +99,24 @@ function App() {
         ?.focus();
     }
   }, [fullReadRequest]);
+
+  useEffect(() => {
+    if (!activePdfSession) {
+      return;
+    }
+
+    return () => {
+      void activePdfSession.session.loadingTask
+        .destroy()
+        .catch((error: unknown) => {
+          console.error('Unable to release the active PDF document.', error);
+        });
+    };
+  }, [activePdfSession]);
+
+  useEffect(() => {
+    return () => thumbnailCache.clear();
+  }, [thumbnailCache]);
 
   function requestDocumentPassword(
     fileName: string,
@@ -127,8 +170,13 @@ function App() {
           },
         });
 
-        setDocuments((currentDocuments) => [...currentDocuments, imported]);
-        setActiveDocumentId(imported.id);
+        const { session, ...documentRecord } = imported;
+        setDocuments((currentDocuments) => [
+          ...currentDocuments,
+          documentRecord,
+        ]);
+        setActiveDocumentId(documentRecord.id);
+        setActivePdfSession({ documentId: documentRecord.id, session });
       } catch (error) {
         failures.push({
           fileName,
@@ -143,6 +191,53 @@ function App() {
     setProgress(null);
   }
 
+  async function selectDocument(document: DocumentRecord): Promise<void> {
+    if (
+      isLoadingDocument ||
+      importRunning.current ||
+      activePdfSession?.documentId === document.id
+    ) {
+      return;
+    }
+
+    setIsOpeningDocument(true);
+    setImportFailures([]);
+    setProgress({
+      fileName: document.fileName,
+      loaded: 0,
+      total: document.size,
+      percent: 0,
+    });
+
+    try {
+      const { openPdfDocument } = await import(
+        './features/documents/pdf-import'
+      );
+      const session = await openPdfDocument(document.file, {
+        requestPassword: (reason) =>
+          requestDocumentPassword(document.fileName, reason),
+        confirmFullRead: (fileSize) =>
+          requestFullReadConfirmation(document.fileName, fileSize),
+        onProgress: (nextProgress) => {
+          setProgress({ fileName: document.fileName, ...nextProgress });
+        },
+      });
+
+      setActiveDocumentId(document.id);
+      setActivePdfSession({ documentId: document.id, session });
+    } catch (error) {
+      setImportFailures([
+        {
+          fileName: document.fileName,
+          message: getImportFailureMessage(error),
+        },
+      ]);
+    } finally {
+      setIsOpeningDocument(false);
+      setProgress(null);
+    }
+  }
+
   function handleFileInputChange(
     event: FormEvent<HTMLInputElement>,
   ): void {
@@ -154,7 +249,7 @@ function App() {
 
   function handleDrop(event: DragEvent<HTMLElement>): void {
     event.preventDefault();
-    if (!isImporting) {
+    if (!isLoadingDocument) {
       void importFiles(Array.from(event.dataTransfer.files));
     }
   }
@@ -369,7 +464,8 @@ function App() {
                       className="document-list-item"
                       type="button"
                       aria-pressed={document.id === activeDocumentId}
-                      onClick={() => setActiveDocumentId(document.id)}
+                      disabled={isLoadingDocument}
+                      onClick={() => void selectDocument(document)}
                     >
                       <span className="document-list-name">
                         {document.fileName}
@@ -389,7 +485,21 @@ function App() {
             <div className="panel-title-row">
               <h2 id="pages-heading">{es.documents.pagesHeading}</h2>
             </div>
-            <p className="thumbnail-empty">{es.documents.emptyPages}</p>
+            {activeDocument && activeSession ? (
+              <ThumbnailList
+                key={activeDocument.id}
+                cache={thumbnailCache}
+                document={activeSession.document}
+                documentId={activeDocument.id}
+                pageCount={activeDocument.pageCount}
+              />
+            ) : (
+              <p className="thumbnail-empty">
+                {activeDocument
+                  ? es.documents.reopening
+                  : es.documents.emptyPages}
+              </p>
+            )}
           </section>
         </aside>
 
@@ -410,14 +520,14 @@ function App() {
               <span className="state-dot" aria-hidden="true" />
               {activeDocument
                 ? es.workspace.activeDocument
-                : isImporting
+                : isLoadingDocument
                   ? es.workspace.importing
                   : es.workspace.pending}
             </span>
           </div>
 
           <section
-            className={`canvas-stage${isImporting ? ' is-importing' : ''}`}
+            className={`canvas-stage${isLoadingDocument ? ' is-importing' : ''}`}
             aria-label={es.workspace.landmark}
           >
             <div className="empty-document">
@@ -449,13 +559,13 @@ function App() {
                   accept="application/pdf,.pdf"
                   multiple
                   aria-label={es.documents.importButton}
-                  disabled={isImporting}
+                  disabled={isLoadingDocument}
                   onChange={handleFileInputChange}
                 />
                 <button
                   className="import-button"
                   type="button"
-                  disabled={isImporting}
+                  disabled={isLoadingDocument}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   {es.documents.importButton}
@@ -464,7 +574,7 @@ function App() {
               </div>
               <p className="stage-note">{es.documents.sourceNote}</p>
 
-              {isImporting && progress && (
+              {isLoadingDocument && progress && (
                 <div className="import-progress" aria-live="polite">
                   <p>
                     {es.workspace.loading}: {progress.fileName}
@@ -527,7 +637,7 @@ function App() {
       >
         <span className="status-ready">
           <span className="status-dot" aria-hidden="true" />
-          {isImporting ? es.status.loading : es.status.ready}
+          {isLoadingDocument ? es.status.loading : es.status.ready}
         </span>
         <span className="status-item">
           {formatNumber(documents.length)} {es.documents.countLabel}
