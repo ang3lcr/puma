@@ -1,6 +1,6 @@
 # Arquitectura propuesta
 
-**Estado:** arquitectura base aprobada en Etapa 0; shell aprobada en Etapa 1; importación local y metadatos aprobados en Etapa 2; miniaturas virtualizadas implementadas en Etapa 3. Edición, persistencia de proyecto y exportación siguen pendientes de sus etapas.
+**Estado:** arquitectura base aprobada en Etapa 0; shell aprobada en Etapa 1; importación local, miniaturas virtualizadas y visor implementados en Etapas 2–4. Edición, persistencia de proyecto y exportación siguen pendientes de sus etapas.
 
 ## Alcance técnico
 
@@ -49,7 +49,7 @@ docs/
   adr/
 ```
 
-La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniaturas bajo demanda al entrar en la ventana visible y se cancelan al salir. La caché LRU mantiene hasta 64 MiB de `ImageBitmap`, contabilizados a 4 bytes por píxel, y cierra los recursos al expulsarlos o desmontar la aplicación. Al desmontar una miniatura se cancela el renderizado y se llama `page.cleanup()`; al cambiar de documento se destruye el `PDFDocumentLoadingTask` anterior. El visor de alta resolución y sus límites de concurrencia pertenecen a etapas posteriores.
+La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniaturas bajo demanda al entrar en la ventana visible y se cancelan al salir. La selección de miniatura se mantiene sincronizada con el visor de una página, que permite zoom de 25–300 %, ajuste a página y navegación por controles, número o flechas cuando el visor tiene foco. Presenta dimensiones físicas y rotación PDF de solo lectura. El canvas principal está limitado a 16,777,216 píxeles y 8,192 px por lado para acotar memoria; la resolución puede reducirse al alcanzar esos límites. La caché LRU de miniaturas mantiene hasta 64 MiB de `ImageBitmap`, contabilizados a 4 bytes por píxel, y cierra los recursos al expulsarlos o desmontar la aplicación. Al desmontar una miniatura se cancela el renderizado y se llama `page.cleanup()`; al cambiar de documento se destruye el `PDFDocumentLoadingTask` anterior.
 
 ## Modelo de dominio
 
@@ -61,7 +61,7 @@ La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniat
 ## Flujo de datos
 
 1. Importar uno o varios archivos sin alterar el original. PDF.js lee rangos y obtiene metadatos; el conteo de páginas no requiere renderizar todas las páginas. Solo se conserva abierta la sesión PDF del documento activo; al cambiar de documento se libera y el seleccionado se reabre desde su `File`.
-2. Renderizar miniaturas únicamente para las páginas próximas al viewport. Texto digital se conserva como texto; imágenes y páginas mixtas no se rasterizan para analizarlas.
+2. Renderizar miniaturas únicamente para las páginas próximas al viewport y renderizar en el visor solo la página seleccionada. Texto digital se conserva como texto; imágenes y páginas mixtas no se rasterizan para analizarlas.
 3. Procesar imágenes de resolución reducida en Worker con un límite de concurrencia, cancelación, prioridades y mensajes tipados. Transferir buffers cuando sea seguro para evitar copias.
 4. Registrar sugerencias de análisis sin modificar el contenido. Ante baja confianza, marcar «Requiere revisión».
 5. Aplicar acciones del usuario al modelo mediante comandos reversibles.

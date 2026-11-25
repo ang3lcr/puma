@@ -1,6 +1,6 @@
 # ADR 0005 — Lectura local por rangos con PDF.js
 
-- **Estado:** aprobado en Etapa 0; lectura por rangos implementada en Etapa 2 y miniaturas virtualizadas añadidas en Etapa 3 con PDF.js 6.5.438.
+- **Estado:** aprobado en Etapa 0; lectura por rangos, miniaturas virtualizadas y visor de página única implementados en Etapas 2–4 con PDF.js 6.5.438.
 - **Fecha:** 2026-11-25.
 
 ## Contexto
@@ -26,5 +26,6 @@ Para archivos de al menos 400 MiB, antes de leer una petición que eleve la cobe
 - El conteo y el renderizado inicial pueden evitar materializar el archivo completo, aunque el número y tamaño de rangos depende del PDF.
 - La suite E2E valida PDF básico, metadatos, PDF cifrado, contraseña incorrecta/correcta, cancelación, CSP y cero solicitudes externas en los flujos comprobados. En Etapa 3 se añadió un fixture de 1.000 páginas para probar miniaturas bajo demanda, virtualización y navegación hasta la última página.
 - La Etapa 3 conserva el `PDFDocumentLoadingTask` del documento activo para renderizado. Al desmontar una miniatura se cancela su tarea y se llama `page.cleanup()`; al cambiar de documento se destruye la sesión anterior. Las miniaturas se guardan en una caché LRU de `ImageBitmap` limitada a 64 MiB.
+- La Etapa 4 renderiza solo la página seleccionada en el canvas principal. El zoom llega hasta 300 % y el área de canvas se limita a 16,777,216 píxeles y 8,192 px por lado para evitar asignaciones sin cota; el límite puede reducir la resolución efectiva en páginas grandes.
 - Probar en futuras etapas PDF linealizados/no linealizados, xref streams, casos dañados complejos y rangos reales de 500 MiB en Chrome/Edge nativos.
 - Las cifras del fixture sintético no son una garantía de latencia o rango para documentos arbitrarios.

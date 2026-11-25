@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–3 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–4 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
 
 ## Entorno de referencia
 
@@ -78,3 +78,17 @@ Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, `@tanstack/
 | `npm run test:e2e` | 4 E2E aprobadas: CSP/shell, importación/metadatos/error y reapertura al cambiar de documento, PDF de 1.000 páginas con virtualización y render, contraseña/cancelación |
 
 La E2E de 1.000 páginas confirma que el número de filas DOM se mantiene por debajo de 12, que se renderiza una miniatura visible y que el desplazamiento al final llega a la página 1.000. Esta prueba funcional no mide tiempos de render, memoria máxima ni cumplimiento de los umbrales de rendimiento: las mediciones en Chrome/Edge nativos y hardware de referencia continúan pendientes.
+
+## Validación de Etapa 4
+
+Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 1.65.1 y Chromium 159.0.8154.6:
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm run test` | 3 archivos, 10 pruebas aprobadas |
+| `npm run build` | Correcto; shell JS 283.57 kB / 87.34 kB gzip; módulo PDF.js diferido 447.46 kB / 134.94 kB gzip; Worker local 1,271.91 kB |
+| `npm run test:e2e` | 4 E2E aprobadas: CSP/shell, importación local y reapertura, visor/zoom/validación, selección y navegación con 1.000 páginas, contraseña/cancelación |
+
+La suite comprueba render real del canvas, zoom, error de número de página, navegación por teclado, selección desde miniaturas, dimensiones/rotación y ausencia de solicitudes externas. También verifica que la página cabe en el viewport del visor al cambiar a móvil y que no hay desbordamiento horizontal del documento. La inspección visual en el navegador integrado confirma el ajuste y la presentación; no sustituye pruebas de memoria/rendimiento en Chrome/Edge nativos ni verifica las métricas de producción.

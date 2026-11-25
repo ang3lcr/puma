@@ -197,6 +197,7 @@ main:focus-visible {
 .document-panel,
 .properties-panel {
   min-width: 0;
+  min-height: 0;
   background: var(--panel);
 }
 
@@ -359,6 +360,27 @@ main:focus-visible {
   margin: 0;
 }
 
+.thumbnail-select {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  align-items: stretch;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  text-align: inherit;
+}
+
+.thumbnail-select:hover,
+.thumbnail-select.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
 .thumbnail-image {
   position: relative;
   display: grid;
@@ -454,11 +476,11 @@ main:focus-visible {
 }
 
 .canvas-stage {
-  display: grid;
+  display: flex;
   min-height: 300px;
   flex: 1;
   overflow: hidden;
-  place-items: center;
+  padding: 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background-color: var(--canvas);
@@ -467,12 +489,166 @@ main:focus-visible {
   background-size: 17px 17px;
 }
 
+.workspace-progress {
+  flex: 0 0 auto;
+  margin: 0 0 10px;
+}
+
+.workspace-errors {
+  flex: 0 0 auto;
+  margin: 0 0 10px;
+}
+
 .empty-document {
   display: flex;
   max-width: 420px;
   align-items: center;
   flex-direction: column;
   padding: 32px 24px;
+  text-align: center;
+}
+
+.pdf-viewer {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.viewer-toolbar,
+.viewer-page-controls,
+.viewer-page-form,
+.viewer-zoom-controls {
+  display: flex;
+  align-items: center;
+}
+
+.viewer-toolbar {
+  min-height: 38px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.viewer-page-controls,
+.viewer-zoom-controls {
+  gap: 5px;
+}
+
+.viewer-page-form {
+  position: relative;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.viewer-page-form input {
+  width: 58px;
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  background: var(--panel);
+  font: inherit;
+  text-align: center;
+}
+
+.viewer-control {
+  display: inline-flex;
+  min-width: 32px;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  background: var(--panel);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.viewer-control:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.viewer-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.viewer-zoom-value {
+  min-width: 43px;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.viewer-import-control {
+  color: var(--accent);
+}
+
+.viewer-input-error {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 4px);
+  left: 0;
+  width: max-content;
+  max-width: 230px;
+  padding: 6px 8px;
+  border: 1px solid #a34a4a;
+  border-radius: 5px;
+  color: var(--text);
+  background: var(--panel-raised);
+}
+
+.viewer-canvas-scroll {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  justify-content: center;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background-color: var(--canvas);
+  background-image: radial-gradient(var(--border-soft) 0.7px, transparent 0.7px);
+  background-size: 17px 17px;
+}
+
+.viewer-canvas-content {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin: auto;
+  padding: 24px;
+}
+
+.viewer-canvas-content canvas {
+  display: block;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.viewer-render-error {
+  position: absolute;
+  inset: 24px;
+  display: grid;
+  margin: 0;
+  padding: 16px;
+  place-items: center;
+  color: var(--text);
+  background: rgb(12 18 25 / 86%);
+  font-size: 12px;
   text-align: center;
 }
 
@@ -606,6 +782,7 @@ main:focus-visible {
 }
 
 .properties-panel {
+  overflow-y: auto;
   border-left: 1px solid var(--border);
 }
 
@@ -655,6 +832,18 @@ main:focus-visible {
 }
 
 .document-properties h3 {
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.page-properties {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.page-properties h3 {
   margin: 0 0 14px;
   font-size: 12px;
   font-weight: 600;

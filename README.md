@@ -4,7 +4,7 @@ Document Studio es una aplicación de escritorio web, local y sin backend para r
 
 ## Estado
 
-**Etapa 3 completada, pendiente de aprobación.** La aplicación importa PDFs locales con PDF.js, lee metadatos y recuento de páginas, y muestra miniaturas virtualizadas bajo demanda con una caché LRU limitada a 64 MiB. No modifica páginas ni exporta documentos; esas funciones pertenecen a las etapas siguientes.
+**Etapa 4 completada, pendiente de aprobación.** La aplicación importa PDFs locales con PDF.js, muestra miniaturas virtualizadas y un visor de página única con zoom, navegación por teclado o número, selección desde miniaturas y propiedades de página. El render del visor limita el canvas a 16,777,216 píxeles y 8,192 px por lado; la caché de miniaturas se limita a 64 MiB. No modifica páginas ni exporta documentos.
 
 ## Revisión
 
@@ -51,8 +51,8 @@ La suite E2E usa Playwright Chromium y prueba el build de producción mediante `
 
 Selecciona uno o varios PDFs o arrástralos al espacio de trabajo. PDF.js lee rangos desde el `File` original y mantiene su procesamiento en el equipo. La aplicación solicita la contraseña de documentos cifrados sin guardarla; metadatos y nombres se muestran como texto. Si un PDF de al menos 400 MiB requiere leer el 95 % o más del archivo, se solicita confirmación antes de continuar.
 
-La referencia al `File` dura solo durante la sesión. Solo el documento activo conserva una sesión PDF abierta; al cambiar de documento se libera la sesión anterior y se vuelve a abrir el nuevo desde su `File`. Al recargar el navegador hay que volver a seleccionar los archivos; persistencia de handles y recuperación pertenecen a la Etapa 12. La lista virtualiza páginas y genera miniaturas visibles bajo demanda. La caché LRU mantiene hasta 64 MiB de `ImageBitmap` y libera recursos expulsados o al cerrar la aplicación. Importar no modifica el original ni crea una exportación.
+La referencia al `File` dura solo durante la sesión. Solo el documento activo conserva una sesión PDF abierta; al cambiar de documento se libera la sesión anterior y se vuelve a abrir el nuevo desde su `File`. Al recargar el navegador hay que volver a seleccionar los archivos; persistencia de handles y recuperación pertenecen a la Etapa 12. La lista virtualiza páginas y genera miniaturas visibles bajo demanda. Se puede seleccionar una miniatura, navegar por número o flechas, y ajustar el zoom entre 25 % y 300 % o a página. Las propiedades muestran dimensiones físicas y rotación. La caché LRU mantiene hasta 64 MiB de `ImageBitmap` y libera recursos expulsados o al cerrar la aplicación. Importar no modifica el original ni crea una exportación.
 
 ## Alcance de las etapas
 
-El diseño y las decisiones de la Etapa 0 fueron aprobados. Se conservan el objetivo de prueba de 4 núcleos/8 GiB y los umbrales de [TESTING.md](./TESTING.md), que todavía deben validarse en Chrome/Edge cuando ese hardware/navegador esté disponible. Las Etapas 1–3 entregaron shell, importación local y miniaturas virtualizadas; aún no hay edición ni exportación.
+El diseño y las decisiones de la Etapa 0 fueron aprobados. Se conservan el objetivo de prueba de 4 núcleos/8 GiB y los umbrales de [TESTING.md](./TESTING.md), que todavía deben validarse en Chrome/Edge cuando ese hardware/navegador esté disponible. Las Etapas 1–4 entregaron shell, importación local, miniaturas virtualizadas y visor accesible; aún no hay edición ni exportación.

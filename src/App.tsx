@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DragEvent, FormEvent, KeyboardEvent } from 'react';
 import {
   PdfImportError,
@@ -11,6 +11,8 @@ import {
   type PdfImportProgress,
 } from './features/documents/pdf-import-types';
 import { ThumbnailList } from './features/pages/ThumbnailList';
+import { PageViewer } from './features/pages/PageViewer';
+import type { PageInfo } from './features/pages/PageViewer';
 import { ByteLruCache } from './features/pages/thumbnail-cache';
 import { es } from './i18n/es';
 import { formatBytes, formatNumber } from './i18n/format';
@@ -48,6 +50,10 @@ function App() {
   const [theme, setTheme] = useState<Theme>('dark');
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
+  const [activePageNumber, setActivePageNumber] = useState(1);
+  const [activePageInfo, setActivePageInfo] = useState<
+    (PageInfo & { documentId: string; pageNumber: number }) | null
+  >(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isOpeningDocument, setIsOpeningDocument] = useState(false);
   const [activePdfSession, setActivePdfSession] =
@@ -81,9 +87,26 @@ function App() {
     activePdfSession?.documentId === activeDocumentId
       ? activePdfSession.session
       : null;
+  const currentPageInfo =
+    activePageInfo?.documentId === activeDocumentId &&
+    activePageInfo.pageNumber === activePageNumber
+      ? activePageInfo
+      : null;
   const totalPages = documents.reduce(
     (count, document) => count + document.pageCount,
     0,
+  );
+  const updatePageInfo = useCallback(
+    (pageNumber: number, info: PageInfo): void => {
+      if (activeDocumentId) {
+        setActivePageInfo({
+          ...info,
+          documentId: activeDocumentId,
+          pageNumber,
+        });
+      }
+    },
+    [activeDocumentId],
   );
 
   useEffect(() => {
@@ -176,6 +199,7 @@ function App() {
           documentRecord,
         ]);
         setActiveDocumentId(documentRecord.id);
+        setActivePageNumber(1);
         setActivePdfSession({ documentId: documentRecord.id, session });
       } catch (error) {
         failures.push({
@@ -224,6 +248,7 @@ function App() {
       });
 
       setActiveDocumentId(document.id);
+      setActivePageNumber(1);
       setActivePdfSession({ documentId: document.id, session });
     } catch (error) {
       setImportFailures([
@@ -492,6 +517,8 @@ function App() {
                 document={activeSession.document}
                 documentId={activeDocument.id}
                 pageCount={activeDocument.pageCount}
+                selectedPageNumber={activePageNumber}
+                onSelectPage={setActivePageNumber}
               />
             ) : (
               <p className="thumbnail-empty">
@@ -511,6 +538,16 @@ function App() {
           onDragOver={(event) => event.preventDefault()}
           onDrop={handleDrop}
         >
+          <input
+            ref={fileInputRef}
+            className="visually-hidden"
+            type="file"
+            accept="application/pdf,.pdf"
+            multiple
+            aria-label={es.documents.importButton}
+            disabled={isLoadingDocument}
+            onChange={handleFileInputChange}
+          />
           <div className="workspace-header">
             <div>
               <p className="eyebrow">{es.workspace.eyebrow}</p>
@@ -526,77 +563,79 @@ function App() {
             </span>
           </div>
 
+          {isLoadingDocument && progress && (
+            <div className="import-progress workspace-progress" aria-live="polite">
+              <p>
+                {es.workspace.loading}: {progress.fileName}
+              </p>
+              <progress
+                aria-label={es.workspace.importProgress}
+                max={100}
+                value={progress.percent}
+              />
+            </div>
+          )}
+
+          {importFailures.length > 0 && (
+            <ul className="import-errors workspace-errors" role="alert">
+              {importFailures.map((failure, index) => (
+                <li key={`${failure.fileName}-${index}`}>
+                  <strong>{failure.fileName}:</strong> {failure.message}
+                </li>
+              ))}
+            </ul>
+          )}
+
           <section
             className={`canvas-stage${isLoadingDocument ? ' is-importing' : ''}`}
             aria-label={es.workspace.landmark}
           >
-            <div className="empty-document">
-              <div className="document-glyph" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </div>
-              {activeDocument ? (
-                <>
-                  <h2>{activeDocument.fileName}</h2>
-                  <p>
-                    {formatNumber(activeDocument.pageCount)}{' '}
-                    {es.documents.pageCountLabel}
-                  </p>
-                  <p className="stage-note">{es.workspace.activeDocument}</p>
-                </>
-              ) : (
-                <>
-                  <h2>{es.workspace.emptyHeading}</h2>
-                  <p>{es.workspace.emptyDescription}</p>
-                </>
-              )}
-              <div className="import-controls">
-                <input
-                  ref={fileInputRef}
-                  className="visually-hidden"
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  multiple
-                  aria-label={es.documents.importButton}
-                  disabled={isLoadingDocument}
-                  onChange={handleFileInputChange}
-                />
-                <button
-                  className="import-button"
-                  type="button"
-                  disabled={isLoadingDocument}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {es.documents.importButton}
-                </button>
-                <p className="import-hint">{es.documents.importDescription}</p>
-              </div>
-              <p className="stage-note">{es.documents.sourceNote}</p>
-
-              {isLoadingDocument && progress && (
-                <div className="import-progress" aria-live="polite">
-                  <p>
-                    {es.workspace.loading}: {progress.fileName}
-                  </p>
-                  <progress
-                    aria-label={es.workspace.importProgress}
-                    max={100}
-                    value={progress.percent}
-                  />
+            {activeDocument && activeSession ? (
+              <PageViewer
+                key={activeDocument.id}
+                document={activeSession.document}
+                pageNumber={activePageNumber}
+                pageCount={activeDocument.pageCount}
+                onPageChange={setActivePageNumber}
+                onPageInfo={updatePageInfo}
+                onImport={() => fileInputRef.current?.click()}
+                importDisabled={isLoadingDocument}
+              />
+            ) : (
+              <div className="empty-document">
+                <div className="document-glyph" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
                 </div>
-              )}
-
-              {importFailures.length > 0 && (
-                <ul className="import-errors" role="alert">
-                  {importFailures.map((failure, index) => (
-                    <li key={`${failure.fileName}-${index}`}>
-                      <strong>{failure.fileName}:</strong> {failure.message}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+                <h2>
+                  {activeDocument
+                    ? activeDocument.fileName
+                    : es.workspace.emptyHeading}
+                </h2>
+                <p>
+                  {activeDocument
+                    ? es.documents.reopening
+                    : es.workspace.emptyDescription}
+                </p>
+                {!activeDocument && (
+                  <div className="import-controls">
+                    <button
+                      className="import-button"
+                      type="button"
+                      disabled={isLoadingDocument}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {es.documents.importButton}
+                    </button>
+                    <p className="import-hint">
+                      {es.documents.importDescription}
+                    </p>
+                  </div>
+                )}
+                <p className="stage-note">{es.documents.sourceNote}</p>
+              </div>
+            )}
           </section>
         </main>
 
@@ -616,6 +655,37 @@ function App() {
                   </div>
                 ))}
               </dl>
+              {currentPageInfo && (
+                <section className="page-properties">
+                  <h3>{es.properties.pageHeading}</h3>
+                  <dl>
+                    <div className="metadata-row">
+                      <dt>{es.properties.currentPage}</dt>
+                      <dd>
+                        {formatNumber(currentPageInfo.pageNumber)} /{' '}
+                        {formatNumber(activeDocument.pageCount)}
+                      </dd>
+                    </div>
+                    <div className="metadata-row">
+                      <dt>{es.properties.pageDimensions}</dt>
+                      <dd>
+                        {formatNumber(currentPageInfo.widthMillimeters, {
+                          maximumFractionDigits: 1,
+                        })}{' '}
+                        ×{' '}
+                        {formatNumber(currentPageInfo.heightMillimeters, {
+                          maximumFractionDigits: 1,
+                        })}{' '}
+                        mm
+                      </dd>
+                    </div>
+                    <div className="metadata-row">
+                      <dt>{es.properties.pageRotation}</dt>
+                      <dd>{formatNumber(currentPageInfo.rotation)}°</dd>
+                    </div>
+                  </dl>
+                </section>
+              )}
             </div>
           ) : (
             <div className="properties-empty">

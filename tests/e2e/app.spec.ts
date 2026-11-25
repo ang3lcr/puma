@@ -35,7 +35,7 @@ test('initial workspace is usable and makes no external network requests', async
   await expect(
     page.getByRole('heading', { name: 'Espacio de trabajo' }),
   ).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('Archivos locales');
+  await expect(page.locator('.statusbar')).toContainText('Archivos locales');
   await expect(
     page.getByRole('button', { name: 'Cambiar a tema claro' }),
   ).toBeVisible();
@@ -88,20 +88,60 @@ test('imports PDF metadata locally and reports invalid PDF files', async ({
     buffer: createMinimalPdf(),
   });
 
-  await expect(page.getByRole('heading', { name: 'local.pdf' })).toBeVisible();
+  await expect(page.locator('.document-properties')).toContainText('local.pdf');
   await expect(page.getByText('Fixture document')).toBeVisible();
   await expect(page.getByText('Local test')).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('1 páginas');
+  await expect(page.locator('.statusbar')).toContainText('1 páginas');
+  await expect(page.getByRole('button', { name: 'Página anterior' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Página siguiente' })).toBeDisabled();
+  await expect(page.locator('.page-properties')).toContainText(
+    '215,9 × 279,4 mm',
+  );
+  await expect(page.locator('.page-properties')).toContainText('0°');
   await expect(page.locator('canvas[aria-label="Página 1"]')).toBeVisible();
+  const viewerCanvas = page.locator('.viewer-canvas-scroll canvas');
+  await expect(viewerCanvas).toBeVisible();
   await expect
     .poll(() =>
-      page
-        .locator('canvas[aria-label="Página 1"]')
-        .evaluate((canvas: HTMLCanvasElement) => canvas.width > 0),
+      viewerCanvas.evaluate((canvas: HTMLCanvasElement) => canvas.width > 0),
     )
     .toBe(true);
+
+  const zoomLevel = page.locator('.viewer-zoom-value');
+  const initialZoom = await zoomLevel.textContent();
+  await page.getByRole('button', { name: 'Aumentar zoom' }).click();
+  await expect(zoomLevel).not.toHaveText(initialZoom ?? '');
+  await page.getByRole('button', { name: 'Ajustar página al área' }).click();
+
+  const pageNumberInput = page.getByRole('spinbutton', {
+    name: 'Número de página',
+  });
+  await pageNumberInput.fill('2');
+  await page.getByRole('button', { name: 'Ir', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'Escribe un número de página entre 1 y 1.',
+  );
+  await expect(pageNumberInput).toHaveValue('2');
+  await pageNumberInput.fill('1');
+  await page.getByRole('button', { name: 'Ir', exact: true }).click();
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('heading', { name: 'Metadatos del documento' })).toBeVisible();
+  await expect
+    .poll(() =>
+      viewerCanvas.evaluate((canvas: HTMLCanvasElement) => {
+        const viewport = canvas.closest('.viewer-canvas-scroll');
+        if (!viewport) {
+          return false;
+        }
+        const bounds = canvas.getBoundingClientRect();
+        return (
+          bounds.width <= viewport.clientWidth &&
+          bounds.height <= viewport.clientHeight
+        );
+      }),
+    )
+    .toBe(true);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -116,16 +156,16 @@ test('imports PDF metadata locally and reports invalid PDF files', async ({
   await expect(page.getByRole('alert')).toContainText(
     'El archivo no parece ser un PDF válido.',
   );
-  await expect(page.getByRole('heading', { name: 'local.pdf' })).toBeVisible();
+  await expect(page.locator('.document-properties')).toContainText('local.pdf');
 
   await page.getByLabel('Seleccionar PDF').setInputFiles({
     name: 'second.pdf',
     mimeType: 'application/pdf',
     buffer: createMinimalPdf(),
   });
-  await expect(page.getByRole('heading', { name: 'second.pdf' })).toBeVisible();
+  await expect(page.locator('.document-properties')).toContainText('second.pdf');
   await page.locator('.document-list-item').first().click();
-  await expect(page.getByRole('heading', { name: 'local.pdf' })).toBeVisible();
+  await expect(page.locator('.document-properties')).toContainText('local.pdf');
   await expect(page.locator('canvas[aria-label="Página 1"]')).toBeVisible();
 
   expect(externalRequests).toEqual([]);
@@ -165,9 +205,37 @@ test('virtualizes long documents and renders thumbnails on demand', async ({
     buffer: createManyPagesPdf(1000),
   });
 
-  await expect(page.getByRole('status')).toContainText('1000 páginas');
+  await expect(page.locator('.statusbar')).toContainText('1000 páginas');
   await expect(page.locator('canvas[aria-label="Página 1"]')).toBeVisible();
   expect(await page.locator('.thumbnail-virtual-row').count()).toBeLessThan(12);
+
+  const pageNumberInput = page.getByRole('spinbutton', {
+    name: 'Número de página',
+  });
+  await pageNumberInput.fill('1000');
+  await page.getByRole('button', { name: 'Ir', exact: true }).click();
+  const viewerCanvas = page.locator('.viewer-canvas-scroll canvas');
+  await expect(viewerCanvas).toHaveAttribute(
+    'aria-label',
+    /1000 de 1000/,
+  );
+  await expect(
+    page.getByRole('button', { name: 'Seleccionar página 1000' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect
+    .poll(() =>
+      viewerCanvas.evaluate((canvas: HTMLCanvasElement) => canvas.width > 0),
+    )
+    .toBe(true);
+
+  await page.locator('.viewer-canvas-scroll').focus();
+  await page.locator('.viewer-canvas-scroll').press('ArrowLeft');
+  await expect(pageNumberInput).toHaveValue('999');
+  await page.getByRole('button', { name: 'Seleccionar página 1000' }).click();
+  await expect(pageNumberInput).toHaveValue('1000');
+  await pageNumberInput.fill('1');
+  await page.getByRole('button', { name: 'Ir', exact: true }).click();
+  await expect(pageNumberInput).toHaveValue('1');
 
   await page
     .locator('.thumbnail-scroll')
@@ -229,7 +297,9 @@ test('prompts for an encrypted PDF password and allows cancellation', async ({
   await page.getByLabel('Contraseña').fill('secret');
   await page.getByRole('button', { name: 'Abrir documento' }).click();
 
-  await expect(page.getByRole('heading', { name: 'protected.pdf' })).toBeVisible();
+  await expect(page.locator('.document-properties')).toContainText(
+    'protected.pdf',
+  );
   await expect(page.getByText('Protegido con contraseña')).toBeVisible();
   await expect(
     page

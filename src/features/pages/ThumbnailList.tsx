@@ -13,6 +13,8 @@ interface ThumbnailListProps {
   documentId: string;
   document: PDFDocumentProxy;
   pageCount: number;
+  selectedPageNumber: number;
+  onSelectPage: (pageNumber: number) => void;
   cache: ByteLruCache<string, ImageBitmap>;
 }
 
@@ -20,6 +22,8 @@ export function ThumbnailList({
   documentId,
   document,
   pageCount,
+  selectedPageNumber,
+  onSelectPage,
   cache,
 }: ThumbnailListProps) {
   const scrollElementRef = useRef<HTMLDivElement>(null);
@@ -32,6 +36,12 @@ export function ThumbnailList({
     getItemKey: (index) => `${documentId}:${index + 1}`,
     overscan: 3,
   });
+
+  useEffect(() => {
+    if (pageCount > 0) {
+      virtualizer.scrollToIndex(selectedPageNumber - 1, { align: 'auto' });
+    }
+  }, [pageCount, selectedPageNumber, virtualizer]);
 
   if (pageCount === 0) {
     return <p className="thumbnail-empty">{es.documents.emptyPages}</p>;
@@ -66,6 +76,8 @@ export function ThumbnailList({
               document={document}
               documentId={documentId}
               pageNumber={virtualItem.index + 1}
+              selected={virtualItem.index + 1 === selectedPageNumber}
+              onSelect={onSelectPage}
             />
           </li>
         ))}
@@ -79,6 +91,8 @@ interface PageThumbnailProps {
   document: PDFDocumentProxy;
   documentId: string;
   pageNumber: number;
+  selected: boolean;
+  onSelect: (pageNumber: number) => void;
 }
 
 function PageThumbnail({
@@ -86,6 +100,8 @@ function PageThumbnail({
   document,
   documentId,
   pageNumber,
+  selected,
+  onSelect,
 }: PageThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState(false);
@@ -176,18 +192,26 @@ function PageThumbnail({
 
   return (
     <figure className="thumbnail-card">
-      <div className="thumbnail-image">
-        <canvas
-          ref={canvasRef}
-          aria-label={`${es.documents.pageLabel} ${formatNumber(pageNumber)}`}
-          className={error ? 'thumbnail-canvas has-error' : 'thumbnail-canvas'}
-        />
-        {error && (
-          <span className="thumbnail-error" role="status">
-            {es.documents.thumbnailError}
-          </span>
-        )}
-      </div>
+      <button
+        className={`thumbnail-select${selected ? ' is-selected' : ''}`}
+        type="button"
+        aria-label={`${es.viewer.selectPage} ${formatNumber(pageNumber)}`}
+        aria-pressed={selected}
+        onClick={() => onSelect(pageNumber)}
+      >
+        <span className="thumbnail-image">
+          <canvas
+            ref={canvasRef}
+            aria-label={`${es.documents.pageLabel} ${formatNumber(pageNumber)}`}
+            className={error ? 'thumbnail-canvas has-error' : 'thumbnail-canvas'}
+          />
+          {error && (
+            <span className="thumbnail-error" role="status">
+              {es.documents.thumbnailError}
+            </span>
+          )}
+        </span>
+      </button>
       <figcaption>
         {es.documents.pageLabel} {formatNumber(pageNumber)}
       </figcaption>
