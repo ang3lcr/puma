@@ -139,6 +139,7 @@ function MarginEditorForm({
     >
       <h3>{es.margins.heading}</h3>
       <p>{es.margins.description}</p>
+      <p>{es.margins.dragInstructions}</p>
       {geometry ? (
         <form onSubmit={submit}>
           <div className="margin-editor-fields">

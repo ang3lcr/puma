@@ -4,11 +4,11 @@ export type BlankPageAnalysisStatus =
   | 'needs-review';
 
 export type BlankPageAnalysisReason =
-  | 'text-content'
   | 'annotation-present'
   | 'no-visible-content'
   | 'visible-content'
   | 'sparse-content'
+  | 'ambiguous-background'
   | 'analysis-error';
 
 export interface BlankPageAnalysis {

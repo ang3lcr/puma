@@ -34,8 +34,6 @@ export function getBlankPageReasonLabel(
   analysis: BlankPageAnalysis,
 ): string {
   switch (analysis.reason) {
-    case 'text-content':
-      return es.blankDetection.textReason;
     case 'annotation-present':
       return es.blankDetection.annotationReason;
     case 'no-visible-content':
@@ -44,6 +42,8 @@ export function getBlankPageReasonLabel(
       return es.blankDetection.pixelReason;
     case 'sparse-content':
       return es.blankDetection.sparseReason;
+    case 'ambiguous-background':
+      return es.blankDetection.ambiguousBackgroundReason;
     case 'analysis-error':
       return es.blankDetection.errorReason;
     default:

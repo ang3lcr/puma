@@ -12,7 +12,7 @@ La Etapa 10 permite definir un recorte antes de implementar persistencia y expor
 - Cada página mantiene una `cropBox` en coordenadas PDF de espacio de usuario. `null` representa conservar la caja visible original de PDF.js.
 - El editor captura márgenes físicos en milímetros. Convierte con `UserUnit` y la rotación cardinal efectiva (rotación nativa más delta del proyecto), por lo que las etiquetas superior/derecha/inferior/izquierda corresponden a la orientación mostrada.
 - La caja resultante debe tener área positiva y permanecer dentro de `page.view`. Márgenes cero restauran la caja original; no se permite ampliar la caja para revelar contenido fuera del área visible actual.
-- El visor sombrea el área excluida y las miniaturas indican que la página tiene una CropBox modificada. Cada ajuste y restauración es un comando reversible; las duplicaciones heredan el CropBox.
+- El visor sombrea el área excluida y presenta cuatro guías arrastrables con el puntero o ajustables con flechas/Home desde el teclado. El arrastre muestra una previsualización provisional y registra un único comando reversible al soltar. Los campos numéricos siguen disponibles; las miniaturas indican que la página tiene una CropBox modificada y las duplicaciones heredan el CropBox.
 - El cambio solo altera el modelo del proyecto y la previsualización. No reescribe el PDF fuente, ni rasteriza o elimina objetos. Aplicar la CropBox al PDF generado y validar la salida se reserva para la Etapa 13.
 
 ## Consecuencias

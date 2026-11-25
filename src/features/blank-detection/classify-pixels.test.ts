@@ -14,6 +14,38 @@ describe('classifyPixelData', () => {
     });
   });
 
+  it('treats a uniform light-gray scan background as blank', () => {
+    const pixels = createSolidPixels(100, 100, 244);
+
+    expect(classifyPixelData(pixels, 100, 100)).toMatchObject({
+      status: 'likely-blank',
+      reason: 'no-visible-content',
+      foregroundPixelCount: 0,
+      foregroundPixelRatio: 0,
+    });
+  });
+
+  it('detects dark marks by contrast against a light-gray scan background', () => {
+    const pixels = createSolidPixels(100, 100, 244);
+    setForegroundPixels(pixels, Array.from({ length: 10 }, (_, index) => index));
+
+    expect(classifyPixelData(pixels, 100, 100)).toMatchObject({
+      status: 'content-detected',
+      reason: 'visible-content',
+      foregroundPixelCount: 10,
+      foregroundPixelRatio: 0.001,
+    });
+  });
+
+  it('sends dark or ambiguous page backgrounds to manual review', () => {
+    const pixels = createSolidPixels(100, 100, 80);
+
+    expect(classifyPixelData(pixels, 100, 100)).toMatchObject({
+      status: 'needs-review',
+      reason: 'ambiguous-background',
+    });
+  });
+
   it('routes sparse marks to manual review instead of calling the page blank', () => {
     const pixels = createWhitePixels(100, 100);
     setForegroundPixels(pixels, [5050]);
@@ -51,11 +83,19 @@ describe('classifyPixelData', () => {
 });
 
 function createWhitePixels(width: number, height: number): Uint8ClampedArray {
+  return createSolidPixels(width, height, 255);
+}
+
+function createSolidPixels(
+  width: number,
+  height: number,
+  level: number,
+): Uint8ClampedArray {
   const pixels = new Uint8ClampedArray(width * height * 4);
   for (let offset = 0; offset < pixels.length; offset += 4) {
-    pixels[offset] = 255;
-    pixels[offset + 1] = 255;
-    pixels[offset + 2] = 255;
+    pixels[offset] = level;
+    pixels[offset + 1] = level;
+    pixels[offset + 2] = level;
     pixels[offset + 3] = 255;
   }
   return pixels;

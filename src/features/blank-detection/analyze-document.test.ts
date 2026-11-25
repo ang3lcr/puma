@@ -32,7 +32,6 @@ describe('analyzeDocumentPages', () => {
   it('routes pages with annotations to review without rasterizing them', async () => {
     vi.stubGlobal('Worker', TestWorker);
     const page = {
-      getTextContent: vi.fn().mockResolvedValue({ items: [] }),
       getAnnotations: vi.fn().mockResolvedValue([{ subtype: 'Link' }]),
       cleanup: vi.fn(),
     };
@@ -61,15 +60,14 @@ describe('analyzeDocumentPages', () => {
     expect(page.cleanup).toHaveBeenCalledOnce();
   });
 
-  it('stops after cancellation while text content is being read', async () => {
+  it('stops after cancellation while annotations are being read', async () => {
     vi.stubGlobal('Worker', TestWorker);
-    let resolveText: ((value: { items: never[] }) => void) | undefined;
-    const textContent = new Promise<{ items: never[] }>((resolve) => {
-      resolveText = resolve;
+    let resolveAnnotations: ((value: never[]) => void) | undefined;
+    const annotations = new Promise<never[]>((resolve) => {
+      resolveAnnotations = resolve;
     });
     const page = {
-      getTextContent: vi.fn(() => textContent),
-      getAnnotations: vi.fn(),
+      getAnnotations: vi.fn(() => annotations),
       cleanup: vi.fn(),
     };
     const controller = new AbortController();
@@ -87,13 +85,12 @@ describe('analyzeDocumentPages', () => {
     });
 
     await vi.waitFor(() => {
-      expect(page.getTextContent).toHaveBeenCalledOnce();
+      expect(page.getAnnotations).toHaveBeenCalledOnce();
     });
     controller.abort();
-    resolveText?.({ items: [] });
+    resolveAnnotations?.([]);
 
     await expect(result).resolves.toBe('cancelled');
-    expect(page.getAnnotations).not.toHaveBeenCalled();
     expect(page.cleanup).toHaveBeenCalledOnce();
     expect(onPageAnalysis).not.toHaveBeenCalled();
   });

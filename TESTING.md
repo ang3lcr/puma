@@ -146,7 +146,7 @@ Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 
 | `npm test` | 8 archivos, 28 pruebas aprobadas; incluye clasificador de píxeles, guardas de anotaciones, cancelación, cola, historial y UI |
 | `npm run test:e2e` | Build correcto; 6 E2E aprobadas, incluida detección en PDF real, revisión reversible y conservación del número de páginas |
 
-El fixture E2E confirma que una página blanca se marca como candidata y una página con texto se clasifica como contenido. Las anotaciones se envían a revisión sin rasterizar; una cancelación durante la lectura de texto detiene el análisis. El detector procesa secuencialmente y la clasificación de píxeles corre en Worker local. No se midieron falsos positivos/recall, memoria ni tareas largas: no hay corpus etiquetado y siguen pendientes las pruebas de Chrome/Edge nativos en hardware de referencia.
+La validación original de Etapa 8 cubrió una página blanca, una página con texto, anotaciones y cancelación. La corrección de Etapa 10 amplía esas pruebas para OCR extraíble pero visualmente blanco y fondos escaneados claros; el detector actual procesa una muestra visual de cada página, también cuando hay texto, y clasifica píxeles en un Worker local. No se midieron falsos positivos/recall, memoria ni tareas largas: no hay corpus etiquetado y siguen pendientes las pruebas de Chrome/Edge nativos en hardware de referencia.
 
 ## Validación de Etapa 9
 
@@ -169,7 +169,7 @@ Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 
 |---|---|
 | `npm run typecheck` | Correcto, sin errores TypeScript |
 | `npm run lint` | Correcto, sin infracciones |
-| `npm test` | 11 archivos, 51 pruebas aprobadas; incluye conversión de CropBox y márgenes en UserUnit/cuatro rotaciones, validación de geometría, historial y duplicación |
-| `npm run test:e2e` | Build correcto; 8 E2E aprobadas, incluida edición del CropBox, sombreado de la vista, undo/redo, restauración, rotación, validación de recorte demasiado pequeño y viewport móvil |
+| `npm test` | 11 archivos, 54 pruebas aprobadas; incluye conversión de CropBox y márgenes en UserUnit/cuatro rotaciones, validación de geometría, historial, clasificación por contraste y cancelación |
+| `npm run test:e2e` | Build correcto; 9 E2E aprobadas, incluidas guías de recorte arrastrables y por teclado, undo/redo, fondo gris claro, OCR invisible, rotación, revisión y viewport móvil |
 
-El fixture E2E usa un PDF con CropBox no nativa, origen no nulo y UserUnit 2; valida las dimensiones físicas y el remapeo de márgenes al girar. Las pruebas verifican el estado del proyecto y la previsualización, no la escritura de un PDF de salida: materializar y reabrir el CropBox se reserva para la Etapa 13. El editor solo contrae el área visible que expone PDF.js; no mide ni amplía hasta MediaBox. No se validó todavía en Chrome/Edge nativos ni en el hardware de referencia.
+El fixture E2E usa un PDF con CropBox no nativa, origen no nulo y UserUnit 2; valida las dimensiones físicas y el remapeo de márgenes al girar. El arrastre actualiza una previsualización provisional y queda como un solo cambio reversible al soltar; el teclado también ajusta los lados. La detección usa luminancia de contraste y no trata texto OCR invisible como contenido, aunque no se ha calibrado con documentos reales. Las pruebas verifican el estado del proyecto y la previsualización, no la escritura de un PDF de salida: materializar y reabrir el CropBox se reserva para la Etapa 13. El editor solo contrae el área visible que expone PDF.js; no mide ni amplía hasta MediaBox. No se validó todavía en Chrome/Edge nativos ni en el hardware de referencia.

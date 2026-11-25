@@ -1,5 +1,9 @@
 export function createBlankAndTextPdf(): Buffer {
-  const contents = ['', 'BT /F1 18 Tf 72 720 Td (Text page) Tj ET'];
+  const contents = [
+    '',
+    'BT /F1 18 Tf 72 720 Td (Text page) Tj ET',
+    '0.96 g 0 0 612 792 re f\n1 g BT /F1 18 Tf 72 720 Td (Hidden OCR layer) Tj ET',
+  ];
   const pageNumbers = contents.map((_, index) => 4 + index * 2);
   const objects = [
     '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',

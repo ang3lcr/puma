@@ -1332,6 +1332,7 @@ function App() {
                 onMovePage={moveSelectedPage}
                 onDuplicatePage={duplicateSelectedPage}
                 onRotatePage={rotateSelectedPage}
+                onApplyCropBox={applySelectedPageCropBox}
                 onDeletePage={deleteSelectedPage}
                 onPageInfo={updatePageInfo}
                 onImport={() => fileInputRef.current?.click()}

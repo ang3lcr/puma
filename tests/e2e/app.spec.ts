@@ -211,6 +211,8 @@ test('edits page margins as a reversible CropBox and previews the excluded area'
   await expect(
     page.getByRole('button', { name: 'Aplicar CropBox al proyecto' }),
   ).toBeDisabled();
+  await expect(page.locator('.crop-preview-overlay')).toBeVisible();
+  await expect(page.locator('.crop-preview-shade')).toHaveCount(0);
 
   await top.fill('25.4');
   await right.fill('12.7');
@@ -224,7 +226,8 @@ test('edits page margins as a reversible CropBox and previews the excluded area'
   await expect(page.getByRole('button', { name: 'Deshacer' })).toBeEnabled();
 
   await page.getByRole('button', { name: 'Deshacer' }).click();
-  await expect(page.locator('.crop-preview-overlay')).toHaveCount(0);
+  await expect(page.locator('.crop-preview-overlay')).toBeVisible();
+  await expect(page.locator('.crop-preview-shade')).toHaveCount(0);
   await expect(top).toHaveValue('0');
   await page.getByRole('button', { name: 'Rehacer' }).click();
   await expect(page.locator('.crop-preview-overlay')).toBeVisible();
@@ -236,7 +239,8 @@ test('edits page margins as a reversible CropBox and previews the excluded area'
   await expect(left).toHaveValue('10');
 
   await page.getByRole('button', { name: 'Restaurar área original' }).click();
-  await expect(page.locator('.crop-preview-overlay')).toHaveCount(0);
+  await expect(page.locator('.crop-preview-overlay')).toBeVisible();
+  await expect(page.locator('.crop-preview-shade')).toHaveCount(0);
   await expect(top).toHaveValue('0');
 
   await top.fill('300');
@@ -254,6 +258,54 @@ test('edits page margins as a reversible CropBox and previews the excluded area'
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
     ),
   ).toBe(true);
+  expect(pageErrors).toEqual([]);
+});
+
+test('crops a page by dragging a guide and supports keyboard adjustment', async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.goto('/');
+  await page.getByLabel('Seleccionar PDF').setInputFiles({
+    name: 'crop-drag.pdf',
+    mimeType: 'application/pdf',
+    buffer: createCropBoxPdf(),
+  });
+  const top = page.getByRole('spinbutton', { name: 'Superior (mm)' });
+  await page
+    .getByRole('button', { name: 'Girar página 90° a la derecha' })
+    .click();
+  await expect(page.locator('.page-properties')).toContainText('90°');
+  const topHandle = page.getByRole('slider', {
+    name: 'Línea de recorte superior',
+  });
+  await expect(topHandle).toBeVisible();
+  await expect(top).toHaveValue('0');
+
+  const bounds = await topHandle.boundingBox();
+  if (!bounds) {
+    throw new Error('The top crop guide is not positioned.');
+  }
+  const startX = bounds.x + bounds.width / 2;
+  const startY = bounds.y + bounds.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX, startY + 24);
+  await page.mouse.up();
+
+  await expect(top).not.toHaveValue('0');
+  const draggedMargin = Number(await top.inputValue());
+  await expect(page.getByRole('button', { name: 'Deshacer' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(top).toHaveValue('0');
+  await page.getByRole('button', { name: 'Rehacer' }).click();
+  await expect(top).toHaveValue(String(draggedMargin));
+
+  await topHandle.focus();
+  await topHandle.press('ArrowDown');
+  await expect(top).not.toHaveValue(String(draggedMargin));
   expect(pageErrors).toEqual([]);
 });
 
@@ -315,7 +367,7 @@ test('analyzes blank-page candidates and requires explicit review', async ({
   await expect(page.locator('.blank-scan-status')).toContainText(
     'Análisis terminado; revisa las etiquetas de las miniaturas.',
   );
-  await expect(page.locator('.statusbar')).toContainText('2 páginas');
+  await expect(page.locator('.statusbar')).toContainText('3 páginas');
 
   const review = page.getByRole('region', {
     name: 'Detección de páginas en blanco',
@@ -326,7 +378,7 @@ test('analyzes blank-page candidates and requires explicit review', async ({
   );
   await page.getByRole('button', { name: 'Confirmar como vacía' }).click();
   await expect(review).toContainText('Confirmada como página en blanco');
-  await expect(page.locator('.statusbar')).toContainText('2 páginas');
+  await expect(page.locator('.statusbar')).toContainText('3 páginas');
 
   await page.getByRole('button', { name: 'Deshacer' }).click();
   await expect(page.getByRole('button', { name: 'Confirmar como vacía' })).toBeVisible();
@@ -335,7 +387,10 @@ test('analyzes blank-page candidates and requires explicit review', async ({
 
   await page.getByRole('button', { name: 'Seleccionar página 2' }).click();
   await expect(review).toContainText('Se detectó contenido');
-  await expect(review).toContainText('Se encontró texto en la página.');
+  await expect(review).toContainText('Se detectaron píxeles visibles.');
+  await page.getByRole('button', { name: 'Seleccionar página 3' }).click();
+  await expect(review).toContainText('Posible página en blanco');
+  await expect(review).toContainText('No se detectó contraste visual en la página.');
   expect(pageErrors).toEqual([]);
 });
 

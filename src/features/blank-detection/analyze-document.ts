@@ -99,22 +99,6 @@ async function analyzePage(
   const page = await document.getPage(projectPage.sourcePageNumber);
   try {
     throwIfAborted(signal);
-    const textContent = await page.getTextContent();
-    throwIfAborted(signal);
-    if (
-      textContent.items.some(
-        (item) => 'str' in item && item.str.trim().length > 0,
-      )
-    ) {
-      return {
-        status: 'content-detected',
-        reason: 'text-content',
-        confidence: null,
-        foregroundPixelCount: null,
-        foregroundPixelRatio: null,
-      };
-    }
-
     const annotations = await page.getAnnotations();
     throwIfAborted(signal);
     if (annotations.length > 0) {

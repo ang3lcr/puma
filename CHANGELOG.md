@@ -3,9 +3,10 @@
 ## Etapa 10
 
 - Añadido editor de márgenes físicos en milímetros que crea una CropBox por página, considerando UserUnit y la orientación cardinal efectiva. La caja se limita a la caja visible original de PDF.js; se puede restaurar con un comando reversible.
-- El visor sombrea el área excluida y las miniaturas identifican páginas con CropBox ajustada. El cambio modifica el estado del proyecto, no el PDF fuente; la exportación que materializa la caja se realizará en la Etapa 13 y no se elimina ni rasteriza contenido.
+- El visor sombrea el área excluida y presenta cuatro líneas ajustables con arrastre o teclado; cada gesto registra un único comando reversible al soltar. Las miniaturas identifican páginas con CropBox ajustada. El cambio modifica el estado del proyecto, no el PDF fuente; la exportación que materializa la caja se realizará en la Etapa 13 y no se elimina ni rasteriza contenido.
+- Corregida la detección de páginas vacías: se analiza la muestra visual aunque exista texto extraíble, con contraste respecto al fondo estimado. Los fondos claros uniformes ya no cuentan como contenido y las páginas oscuras o ambiguas pasan a revisión manual.
 - Añadidas pruebas de geometría con orígenes no nulos, UserUnit, cuatro rotaciones, validación de márgenes, historial, duplicación y flujo E2E con undo/redo, restauración, orientación y viewport móvil.
-- Validación: typecheck y lint correctos; 11 archivos de pruebas unitarias/componentes y 51 pruebas aprobadas; build correcto; 8 E2E aprobadas.
+- Validación: typecheck y lint correctos; 11 archivos de pruebas unitarias/componentes y 54 pruebas aprobadas; build correcto; 9 E2E aprobadas, incluidas guías arrastrables, ajuste por teclado, fondo gris claro y texto OCR invisible.
 - La CropBox editada solo puede reducir la caja visible original. La expansión hasta MediaBox, la escritura del PDF exportado, persistencia y validación en Chrome/Edge nativos quedan pendientes de etapas posteriores.
 
 ## Etapa 9

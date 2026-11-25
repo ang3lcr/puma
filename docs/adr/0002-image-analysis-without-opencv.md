@@ -22,5 +22,5 @@ Comenzar con operaciones de píxeles tipadas y pequeñas en Worker. No incluir O
 - Menos peso y trabajo de inicialización en el flujo normal.
 - La lógica de componentes conectados y filtros requerirá pruebas exhaustivas y fixtures etiquetados.
 - El spike de cuatro millones de píxeles no mide la precisión del detector de páginas en blanco.
-- La Etapa 8 usa un umbral de píxel sencillo sobre muestras locales de hasta 256 × 256. Texto y anotaciones evitan la clasificación automática como vacía; píxeles escasos requieren revisión y no se elimina ninguna página.
+- La Etapa 10 estima el fondo por percentil de luminancia y evalúa el contraste en muestras locales de hasta 256 × 256 píxeles. La presencia de texto extraíble no sustituye la comprobación visual; anotaciones, marcas escasas y fondos oscuros o ambiguos requieren revisión. No se elimina ninguna página.
 - Sin un corpus etiquetado no se declaran falsos positivos, recall ni confianza calibrada; la salida es solo una sugerencia para revisión humana.

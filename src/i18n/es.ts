@@ -59,11 +59,12 @@ export const es = {
     confidenceNotCalibrated: 'No calibrada; falta un corpus etiquetado.',
     manualOnly:
       'La detección es orientativa; las páginas nunca se eliminan automáticamente.',
-    textReason: 'Se encontró texto en la página.',
     annotationReason: 'La página contiene anotaciones o campos.',
-    whiteReason: 'No se encontraron píxeles visibles ni texto.',
+    whiteReason: 'No se detectó contraste visual en la página.',
     pixelReason: 'Se detectaron píxeles visibles.',
     sparseReason: 'El contenido visible es escaso y requiere revisión.',
+    ambiguousBackgroundReason:
+      'El fondo es oscuro o ambiguo; revisa la página manualmente.',
     errorReason: 'No se pudo analizar la página; revísala manualmente.',
   },
   orientation: {
@@ -106,10 +107,16 @@ export const es = {
     heading: 'Márgenes y recorte',
     description:
       'Ajusta el área visible de esta página. Los márgenes se miden desde su área visible original.',
+    dragInstructions:
+      'Arrastra las líneas del borde de la página para ajustar el recorte; también puedes moverlas con las flechas del teclado.',
     top: 'Superior (mm)',
     right: 'Derecho (mm)',
     bottom: 'Inferior (mm)',
     left: 'Izquierdo (mm)',
+    cropTopHandle: 'Línea de recorte superior',
+    cropRightHandle: 'Línea de recorte derecha',
+    cropBottomHandle: 'Línea de recorte inferior',
+    cropLeftHandle: 'Línea de recorte izquierda',
     cropArea: 'Área resultante',
     apply: 'Aplicar CropBox al proyecto',
     reset: 'Restaurar área original',

@@ -1,14 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import type { FormEvent, KeyboardEvent } from 'react';
+import type {
+  FormEvent,
+  KeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { es } from '../../i18n/es';
 import { formatNumber } from '../../i18n/format';
 import {
+  createCropBoxFromMargins,
   getPageMarginsMm,
   isBoxInside,
   readPdfBox,
 } from '../margins/geometry';
-import type { PageGeometry, PdfBox } from '../margins/types';
+import type {
+  PageGeometry,
+  PageMarginsMm,
+  PdfBox,
+} from '../margins/types';
 import type {
   PageRenderQueue,
   RenderJobStatus,
@@ -39,6 +49,7 @@ interface PageViewerProps {
   onMovePage: (direction: 'up' | 'down') => void;
   onDuplicatePage: () => void;
   onRotatePage: (degrees: 90 | 180 | 270) => void;
+  onApplyCropBox: (cropBox: PdfBox | null) => void;
   onDeletePage: () => void;
   onPageInfo: (pageId: string, info: PageInfo) => void;
   onImport: () => void;
@@ -57,6 +68,26 @@ interface PageDimensions {
   height: number;
 }
 
+type CropSide = keyof PageMarginsMm;
+
+interface CropDragState {
+  pointerId: number;
+  pageId: string;
+  side: CropSide;
+  startX: number;
+  startY: number;
+  frameWidth: number;
+  frameHeight: number;
+  geometry: PageGeometry;
+  startingMargins: PageMarginsMm;
+  cropBox: PdfBox | null;
+}
+
+interface CropPreview {
+  pageId: string;
+  cropBox: PdfBox | null;
+}
+
 export function PageViewer({
   document,
   pageId,
@@ -73,6 +104,7 @@ export function PageViewer({
   onMovePage,
   onDuplicatePage,
   onRotatePage,
+  onApplyCropBox,
   onDeletePage,
   onPageInfo,
   onImport,
@@ -80,6 +112,8 @@ export function PageViewer({
   renderQueue,
 }: PageViewerProps) {
   const viewerRef = useRef<HTMLDivElement>(null);
+  const cropDragRef = useRef<CropDragState | null>(null);
+  const [cropPreview, setCropPreview] = useState<CropPreview | null>(null);
   const [viewportSize, setViewportSize] = useState<ViewportSize>({
     width: 0,
     height: 0,
@@ -102,6 +136,8 @@ export function PageViewer({
       : 'queued';
   const currentPageDimensions =
     pageDimensions?.pageId === pageId ? pageDimensions : null;
+  const displayCropBox =
+    cropPreview?.pageId === pageId ? cropPreview.cropBox : cropBox;
 
   useEffect(() => {
     const element = viewerRef.current;
@@ -257,12 +293,12 @@ export function PageViewer({
     viewportSize.width,
   ]);
   const cropMargins =
-    cropBox &&
     pageGeometry &&
-    isBoxInside(cropBox, pageGeometry.viewBox)
+    (displayCropBox === null ||
+      isBoxInside(displayCropBox, pageGeometry.viewBox))
       ? getPageMarginsMm(
           pageGeometry.viewBox,
-          cropBox,
+          displayCropBox,
           pageGeometry.userUnit,
           pageGeometry.rotation,
         )
@@ -274,7 +310,7 @@ export function PageViewer({
     ? currentPageDimensions.height * effectiveZoom
     : 0;
   const pixelsPerMillimeter = (72 / 25.4) * effectiveZoom;
-  const cropPixels = cropMargins
+  const cropPixels = cropMargins && currentPageDimensions
     ? {
         top: cropMargins.top * pixelsPerMillimeter,
         right: cropMargins.right * pixelsPerMillimeter,
@@ -282,6 +318,225 @@ export function PageViewer({
         left: cropMargins.left * pixelsPerMillimeter,
       }
     : null;
+
+  function handleCropPointerDown(
+    side: CropSide,
+    event: ReactPointerEvent<HTMLDivElement>,
+  ): void {
+    if (
+      pageActionsDisabled ||
+      !pageGeometry ||
+      !currentPageDimensions ||
+      !cropMargins ||
+      !event.isPrimary ||
+      event.button !== 0
+    ) {
+      return;
+    }
+
+    const frame = event.currentTarget.closest('.viewer-page-frame');
+    const bounds = frame?.getBoundingClientRect();
+    if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.focus();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    cropDragRef.current = {
+      pointerId: event.pointerId,
+      pageId,
+      side,
+      startX: event.clientX,
+      startY: event.clientY,
+      frameWidth: bounds.width,
+      frameHeight: bounds.height,
+      geometry: pageGeometry,
+      startingMargins: cropMargins,
+      cropBox: displayCropBox,
+    };
+  }
+
+  function handleCropPointerMove(
+    event: ReactPointerEvent<HTMLDivElement>,
+  ): void {
+    const drag = cropDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || drag.pageId !== pageId) {
+      return;
+    }
+
+    const horizontalDelta =
+      ((event.clientX - drag.startX) / drag.frameWidth) *
+      drag.geometry.widthMillimeters;
+    const verticalDelta =
+      ((event.clientY - drag.startY) / drag.frameHeight) *
+      drag.geometry.heightMillimeters;
+    const marginDelta =
+      drag.side === 'top'
+        ? verticalDelta
+        : drag.side === 'bottom'
+          ? -verticalDelta
+          : drag.side === 'left'
+            ? horizontalDelta
+            : -horizontalDelta;
+    const margins = {
+      ...drag.startingMargins,
+      [drag.side]: Math.max(
+        0,
+        drag.startingMargins[drag.side] + marginDelta,
+      ),
+    };
+    const result = createCropBoxFromMargins(
+      drag.geometry.viewBox,
+      drag.geometry.userUnit,
+      drag.geometry.rotation,
+      margins,
+    );
+    if (!result.ok) {
+      return;
+    }
+
+    drag.cropBox = result.cropBox;
+    setCropPreview({ pageId, cropBox: result.cropBox });
+  }
+
+  function finishCropPointer(
+    event: ReactPointerEvent<HTMLDivElement>,
+    cancelled: boolean,
+  ): void {
+    const drag = cropDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    cropDragRef.current = null;
+    setCropPreview(null);
+    if (!cancelled) {
+      onApplyCropBox(drag.cropBox);
+    }
+  }
+
+  function handleCropHandleKeyDown(
+    side: CropSide,
+    event: KeyboardEvent<HTMLDivElement>,
+  ): void {
+    if (event.key === 'Escape' && cropDragRef.current?.pageId === pageId) {
+      event.preventDefault();
+      cropDragRef.current = null;
+      setCropPreview(null);
+      return;
+    }
+    if (
+      pageActionsDisabled ||
+      !pageGeometry ||
+      !cropMargins ||
+      !['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'Home'].includes(
+        event.key,
+      )
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    const delta =
+      event.key === 'Home'
+        ? -cropMargins[side]
+        : event.key === 'ArrowUp' || event.key === 'ArrowRight'
+          ? event.shiftKey
+            ? 10
+            : 1
+          : event.shiftKey
+            ? -10
+            : -1;
+    const margins = {
+      ...cropMargins,
+      [side]: Math.max(0, cropMargins[side] + delta),
+    };
+    const result = createCropBoxFromMargins(
+      pageGeometry.viewBox,
+      pageGeometry.userUnit,
+      pageGeometry.rotation,
+      margins,
+    );
+    if (result.ok) {
+      onApplyCropBox(result.cropBox);
+    }
+  }
+
+  function renderCropHandle(side: CropSide): ReactNode {
+    if (!cropPixels || !cropMargins || !pageGeometry) {
+      return null;
+    }
+
+    const horizontal = side === 'top' || side === 'bottom';
+    const label = {
+      top: es.margins.cropTopHandle,
+      right: es.margins.cropRightHandle,
+      bottom: es.margins.cropBottomHandle,
+      left: es.margins.cropLeftHandle,
+    }[side];
+    const oppositeSides: Record<CropSide, CropSide> = {
+      top: 'bottom',
+      right: 'left',
+      bottom: 'top',
+      left: 'right',
+    };
+    const oppositeSide = oppositeSides[side];
+    const dimension = horizontal
+      ? pageGeometry.heightMillimeters
+      : pageGeometry.widthMillimeters;
+    const maximum = Math.max(
+      cropMargins[side],
+      dimension - cropMargins[oppositeSide] - 0.01,
+    );
+    const position =
+      side === 'top'
+        ? {
+            top: cropPixels.top,
+            left: cropPixels.left,
+            right: cropPixels.right,
+          }
+        : side === 'bottom'
+          ? {
+              bottom: cropPixels.bottom,
+              left: cropPixels.left,
+              right: cropPixels.right,
+            }
+          : side === 'left'
+            ? {
+                top: cropPixels.top,
+                bottom: cropPixels.bottom,
+                left: cropPixels.left,
+              }
+            : {
+                top: cropPixels.top,
+                bottom: cropPixels.bottom,
+                right: cropPixels.right,
+              };
+
+    return (
+      <div
+        key={side}
+        className={`crop-preview-handle crop-preview-handle-${side}${pageActionsDisabled ? ' is-disabled' : ''}`}
+        role="slider"
+        aria-label={label}
+        aria-orientation={horizontal ? 'horizontal' : 'vertical'}
+        aria-valuemin={0}
+        aria-valuemax={maximum}
+        aria-valuenow={cropMargins[side]}
+        aria-valuetext={`${formatNumber(cropMargins[side], { maximumFractionDigits: 2 })} mm`}
+        aria-disabled={pageActionsDisabled}
+        tabIndex={pageActionsDisabled ? -1 : 0}
+        style={position}
+        onPointerDown={(event) => handleCropPointerDown(side, event)}
+        onPointerMove={handleCropPointerMove}
+        onPointerUp={(event) => finishCropPointer(event, false)}
+        onPointerCancel={(event) => finishCropPointer(event, true)}
+        onLostPointerCapture={(event) => finishCropPointer(event, true)}
+        onKeyDown={(event) => handleCropHandleKeyDown(side, event)}
+      />
+    );
+  }
 
   function handleViewerKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.target !== event.currentTarget) {
@@ -511,16 +766,23 @@ export function PageViewer({
               role="img"
             />
             {cropPixels && (
-              <div className="crop-preview-overlay" aria-hidden="true">
+              <div
+                className="crop-preview-overlay"
+                role="group"
+                aria-label={es.margins.heading}
+                aria-disabled={pageActionsDisabled}
+              >
                 {cropPixels.top > 0 && (
                   <div
                     className="crop-preview-shade"
+                    aria-hidden="true"
                     style={{ top: 0, left: 0, right: 0, height: cropPixels.top }}
                   />
                 )}
                 {cropPixels.bottom > 0 && (
                   <div
                     className="crop-preview-shade"
+                    aria-hidden="true"
                     style={{
                       bottom: 0,
                       left: 0,
@@ -532,6 +794,7 @@ export function PageViewer({
                 {cropPixels.left > 0 && (
                   <div
                     className="crop-preview-shade"
+                    aria-hidden="true"
                     style={{
                       top: cropPixels.top,
                       bottom: cropPixels.bottom,
@@ -543,6 +806,7 @@ export function PageViewer({
                 {cropPixels.right > 0 && (
                   <div
                     className="crop-preview-shade"
+                    aria-hidden="true"
                     style={{
                       top: cropPixels.top,
                       bottom: cropPixels.bottom,
@@ -553,6 +817,7 @@ export function PageViewer({
                 )}
                 <div
                   className="crop-preview-border"
+                  aria-hidden="true"
                   style={{
                     top: cropPixels.top,
                     right: cropPixels.right,
@@ -560,6 +825,10 @@ export function PageViewer({
                     left: cropPixels.left,
                   }}
                 />
+                {renderCropHandle('top')}
+                {renderCropHandle('right')}
+                {renderCropHandle('bottom')}
+                {renderCropHandle('left')}
               </div>
             )}
           </div>
