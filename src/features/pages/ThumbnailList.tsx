@@ -405,6 +405,11 @@ function PageThumbnail({
       {orientationLabel && (
         <span className="thumbnail-orientation-label">{orientationLabel}</span>
       )}
+      {page.cropBox && (
+        <span className="thumbnail-crop-label">
+          {es.margins.croppedLabel}
+        </span>
+      )}
     </figure>
   );
 }

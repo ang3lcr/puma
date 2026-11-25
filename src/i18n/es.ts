@@ -101,6 +101,27 @@ export const es = {
       analysisError: 'No se pudo analizar la orientación; revísala manualmente.',
     },
   },
+  margins: {
+    region: 'Editor de márgenes y CropBox',
+    heading: 'Márgenes y recorte',
+    description:
+      'Ajusta el área visible de esta página. Los márgenes se miden desde su área visible original.',
+    top: 'Superior (mm)',
+    right: 'Derecho (mm)',
+    bottom: 'Inferior (mm)',
+    left: 'Izquierdo (mm)',
+    cropArea: 'Área resultante',
+    apply: 'Aplicar CropBox al proyecto',
+    reset: 'Restaurar área original',
+    loading: 'Calculando la geometría de la página…',
+    invalidGeometry: 'No se pudo leer una geometría válida para esta página.',
+    invalidMargins: 'Escribe márgenes válidos iguales o mayores que cero.',
+    cropTooSmall: 'Los márgenes deben dejar un área visible mayor que cero.',
+    originalArea:
+      'El original no se modifica. La CropBox se conservará en el proyecto para la exportación; el contenido exterior no se rasteriza ni se elimina.',
+    croppedLabel: 'CropBox ajustada',
+    applied: 'CropBox aplicada al proyecto.',
+  },
   documents: {
     heading: 'Documentos',
     countLabel: 'documentos',

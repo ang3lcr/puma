@@ -1,6 +1,6 @@
 # Roadmap
 
-**Estado actual:** Etapas 0–8 aprobadas; Etapa 9 completada y pendiente de aprobación. Cada etapa se desarrolla en una interacción, se valida y documenta, se crea su commit/tag y luego se detiene hasta recibir aprobación. No avanzar automáticamente.
+**Estado actual:** Etapas 0–9 aprobadas; Etapa 10 completada y pendiente de aprobación. Cada etapa se desarrolla en una interacción, se valida y documenta, se crea su commit/tag y luego se detiene hasta recibir aprobación. No avanzar automáticamente.
 
 | Etapa | Alcance | Estado |
 |---|---|---|
@@ -13,8 +13,8 @@
 | 6 | Modelo de proyecto, comandos delta y deshacer/rehacer | Completada y aprobada |
 | 7 | Reordenar, eliminar/restaurar, duplicar y rotar páginas dentro del documento de origen | Completada y aprobada |
 | 8 | Detección conservadora de páginas en blanco y revisión | Completada y aprobada |
-| 9 | Sugerencias y corrección de orientación, manual y masiva | Completada; pendiente de aprobación |
-| 10 | Editor de márgenes, CropBox y recorte físico explícito | Pendiente |
+| 9 | Sugerencias y corrección de orientación, manual y masiva | Completada y aprobada |
+| 10 | Editor de márgenes, CropBox y recorte físico explícito | Completada; pendiente de aprobación |
 | 11 | Combinación de documentos y limitaciones de preservación | Pendiente |
 | 12 | Guardado, autoguardado, recuperación, cuotas y migraciones | Pendiente |
 | 13 | Exportación normal, estimación, validación y cancelación segura | Pendiente |

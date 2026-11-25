@@ -1,6 +1,6 @@
 # Arquitectura propuesta
 
-**Estado:** arquitectura base aprobada en Etapa 0; etapas 1–8 aprobadas y Etapa 9 implementada, pendiente de aprobación. Persistencia de proyecto y exportación siguen pendientes de sus etapas.
+**Estado:** arquitectura base aprobada en Etapa 0; etapas 1–9 aprobadas y Etapa 10 implementada, pendiente de aprobación. Persistencia de proyecto y exportación siguen pendientes de sus etapas.
 
 ## Alcance técnico
 
@@ -31,7 +31,7 @@ src/
     pages/             lista virtualizada, visor y selección
     blank-detection/   clasificación conservadora y revisión
     orientation/       análisis de texto, sugerencias y corrección manual/masiva
-    margins/           guías, unidades y modos de recorte
+    margins/           márgenes físicos, geometría CropBox y previsualización
     merging/           orden y composición lógica
     export/            estimación, generación y validación
     projects/          guardado, recuperación y migraciones
@@ -54,7 +54,7 @@ La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniat
 ## Modelo de dominio
 
 - **Documento:** ID estable, nombre tratado como texto no confiable, tamaño, fecha de modificación, cantidad de páginas, metadatos filtrados, indicadores de cifrado/firmas/formularios y referencia reabrible a la fuente.
-- **Página:** ID estable propio, documento y número de origen, rotación nativa, rotación solicitada por el usuario, MediaBox/CropBox/UserUnit, dimensiones, márgenes, tipo de contenido, análisis con confianza, estado de eliminación y estado de modificación. El modelo actual conserva un delta de rotación en pasos de 90°, un indicador de eliminación lógica y, en duplicados, el vínculo con su página de origen; las demás propiedades se incorporarán en sus etapas. Reordenar no cambia el número de origen y solo se permite dentro del documento de origen; mover entre documentos se reserva para la Etapa 11.
+- **Página:** ID estable propio, documento y número de origen, rotación nativa, rotación solicitada por el usuario, CropBox modificada en coordenadas PDF (nula significa conservar la caja visible original), UserUnit, dimensiones, tipo de contenido, análisis con confianza, estado de eliminación y estado de modificación. Los márgenes se editan en milímetros y se convierten usando UserUnit y rotación cardinal. La caja solo puede reducir el área visible que PDF.js expone; no se amplía sobre la caja original ni se modifica el contenido/fuente. El modelo conserva los deltas de rotación y CropBox como comandos reversibles; en duplicados se hereda el recorte. Reordenar no cambia el número de origen y solo se permite dentro del documento de origen; mover entre documentos se reserva para la Etapa 11.
 - **Proyecto:** ID estable, documentos y páginas normalizados por ID, orden de documentos y orden global de páginas. La selección temporal permanece fuera del historial. Los documentos conservan una referencia al `File`; los comandos no copian sus bytes.
 - **Comando:** delta reversible `forward`/`inverse`; importar un documento añade sus registros y páginas en una entrada de historial. Undo/redo mueve el comando entre pilas y una nueva acción descarta la rama de redo.
 
@@ -65,8 +65,9 @@ La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniat
 3. Para la detección de páginas vacías, examinar texto y anotaciones antes de renderizar; cuando no existan, renderizar una muestra de hasta 256 × 256 píxeles y transferirla al Worker local. Procesar páginas secuencialmente y permitir cancelación. Una señal dispersa o una anotación requiere revisión manual.
 4. Registrar sugerencias de análisis sin modificar el contenido. No eliminar páginas automáticamente; las decisiones manuales son reversibles. La confianza no se presenta como porcentaje mientras los detectores carezcan de calibración con un corpus etiquetado.
 5. Para orientar páginas, usar la dirección dominante de texto digital solo cuando sea suficiente y coherente; guardar el giro objetivo como sugerencia, nunca aplicarlo automáticamente. Páginas escaneadas sin texto digital, escritura vertical, direcciones mezcladas o texto inclinado quedan para inspección manual. No se incluye OCR en esta etapa.
-6. Registrar cada importación y operación de página como una orden reversible del proyecto. Ctrl/Cmd+Z deshace, Ctrl/Cmd+Shift+Z o Ctrl/Cmd+Y rehace; los campos editables conservan sus atajos nativos. Las rotaciones de una o varias páginas se agrupan en un solo comando delta; los movimientos entre documentos se añaden en la Etapa 11.
-7. Estimar memoria antes de exportar. Crear el PDF completo en memoria con pdf-lib solo dentro del presupuesto; validar el buffer reabriéndolo con PDF.js y contar páginas antes de escribirlo a destino. Usar escritura temporal/atómica si la API disponible la admite. Si el presupuesto no alcanza, ofrecer archivos de salida por rangos o rechazar la exportación individual con un mensaje claro.
+6. Editar márgenes físicos desde la caja visible original de PDF.js. Convertirlos a una CropBox en espacio de usuario PDF considerando UserUnit y rotación efectiva, mostrar el área excluida sombreada y conservar el cambio como delta reversible del proyecto. Restaurar márgenes cero vuelve a la caja fuente; el editor no altera MediaBox ni borra/rasteriza objetos. Exportar/materializar la CropBox se reserva para la Etapa 13.
+7. Registrar cada importación y operación de página como una orden reversible del proyecto. Ctrl/Cmd+Z deshace, Ctrl/Cmd+Shift+Z o Ctrl/Cmd+Y rehace; los campos editables conservan sus atajos nativos. Las rotaciones de una o varias páginas y cada CropBox se registran como comandos delta; los movimientos entre documentos se añaden en la Etapa 11.
+8. Estimar memoria antes de exportar. Crear el PDF completo en memoria con pdf-lib solo dentro del presupuesto; validar el buffer reabriéndolo con PDF.js y contar páginas antes de escribirlo a destino. Usar escritura temporal/atómica si la API disponible la admite. Si el presupuesto no alcanza, ofrecer archivos de salida por rangos o rechazar la exportación individual con un mensaje claro.
 
 ## Seguridad, privacidad y compatibilidad
 

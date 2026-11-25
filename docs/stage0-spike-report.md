@@ -100,6 +100,7 @@ ADRs propuestos:
 - [0003 — referencias y persistencia](./adr/0003-file-reference-and-local-storage.md)
 - [0004 — sugerencias de orientación](./adr/0004-orientation-suggestions.md)
 - [0005 — lectura PDF.js por rangos](./adr/0005-pdfjs-local-range-transport.md)
+- [0006 — editor de márgenes y CropBox](./adr/0006-margins-cropbox-editor.md)
 
 ## 9. Validación de rendimiento pendiente
 

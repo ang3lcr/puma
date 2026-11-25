@@ -4,6 +4,7 @@ import { createManyPagesPdf } from '../fixtures/many-pages-pdf';
 import { createPasswordProtectedPdf } from '../fixtures/password-protected-pdf';
 import { createBlankAndTextPdf } from '../fixtures/blank-and-text-pdf';
 import { createOrientationPdf } from '../fixtures/orientation-pdf';
+import { createCropBoxPdf } from '../fixtures/crop-box-pdf';
 
 test('initial workspace is usable and makes no external network requests', async ({
   page,
@@ -183,6 +184,76 @@ test('imports PDF metadata locally and reports invalid PDF files', async ({
   await expect(page.locator('canvas[aria-label="Página 1"]')).toBeVisible();
 
   expect(externalRequests).toEqual([]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('edits page margins as a reversible CropBox and previews the excluded area', async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.goto('/');
+  await page.getByLabel('Seleccionar PDF').setInputFiles({
+    name: 'crop.pdf',
+    mimeType: 'application/pdf',
+    buffer: createCropBoxPdf(),
+  });
+
+  await expect(page.locator('.page-properties')).toContainText(
+    '381 × 508 mm',
+  );
+  const top = page.getByRole('spinbutton', { name: 'Superior (mm)' });
+  const right = page.getByRole('spinbutton', { name: 'Derecho (mm)' });
+  const bottom = page.getByRole('spinbutton', { name: 'Inferior (mm)' });
+  const left = page.getByRole('spinbutton', { name: 'Izquierdo (mm)' });
+  await expect(top).toHaveValue('0');
+  await expect(
+    page.getByRole('button', { name: 'Aplicar CropBox al proyecto' }),
+  ).toBeDisabled();
+
+  await top.fill('25.4');
+  await right.fill('12.7');
+  await bottom.fill('10');
+  await left.fill('15.2');
+  await page.getByRole('button', { name: 'Aplicar CropBox al proyecto' }).click();
+  await expect(page.locator('.crop-preview-overlay')).toBeVisible();
+  await expect(page.locator('.thumbnail-crop-label')).toHaveText(
+    'CropBox ajustada',
+  );
+  await expect(page.getByRole('button', { name: 'Deshacer' })).toBeEnabled();
+
+  await page.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(page.locator('.crop-preview-overlay')).toHaveCount(0);
+  await expect(top).toHaveValue('0');
+  await page.getByRole('button', { name: 'Rehacer' }).click();
+  await expect(page.locator('.crop-preview-overlay')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Girar página 90° a la derecha' }).click();
+  await expect(top).toHaveValue('15.2');
+  await expect(right).toHaveValue('25.4');
+  await expect(bottom).toHaveValue('12.7');
+  await expect(left).toHaveValue('10');
+
+  await page.getByRole('button', { name: 'Restaurar área original' }).click();
+  await expect(page.locator('.crop-preview-overlay')).toHaveCount(0);
+  await expect(top).toHaveValue('0');
+
+  await top.fill('300');
+  await bottom.fill('300');
+  await expect(page.getByRole('alert')).toContainText(
+    'Los márgenes deben dejar un área visible mayor que cero.',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Aplicar CropBox al proyecto' }),
+  ).toBeDisabled();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(top).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
   expect(pageErrors).toEqual([]);
 });
 

@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–9 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–10 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
 
 ## Entorno de referencia
 
@@ -160,3 +160,16 @@ Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 
 | `npm run test:e2e` | Build correcto; 7 E2E aprobadas, incluida orientación de texto a 0°/90°/180°/270°, rotación nativa `/Rotate`, corrección individual/masiva, undo/redo y viewport de 390 px |
 
 El fixture sintético valida el cálculo geométrico y los comandos de UI, no la precisión sobre documentos reales. El analizador requiere al menos 16 caracteres y una dirección cardinal con ≥90 % del texto válido; estos umbrales aún no se calibran. Páginas sin texto digital, escritura vertical, poco texto, direcciones mixtas y texto no cardinal quedan para revisión manual. No se midieron precisión/cobertura en corpus, tareas largas, memoria ni rendimiento en Chrome/Edge nativos.
+
+## Validación de Etapa 10
+
+Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 1.65.1 y Chromium 159.0.8154.6:
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm test` | 11 archivos, 51 pruebas aprobadas; incluye conversión de CropBox y márgenes en UserUnit/cuatro rotaciones, validación de geometría, historial y duplicación |
+| `npm run test:e2e` | Build correcto; 8 E2E aprobadas, incluida edición del CropBox, sombreado de la vista, undo/redo, restauración, rotación, validación de recorte demasiado pequeño y viewport móvil |
+
+El fixture E2E usa un PDF con CropBox no nativa, origen no nulo y UserUnit 2; valida las dimensiones físicas y el remapeo de márgenes al girar. Las pruebas verifican el estado del proyecto y la previsualización, no la escritura de un PDF de salida: materializar y reabrir el CropBox se reserva para la Etapa 13. El editor solo contrae el área visible que expone PDF.js; no mide ni amplía hasta MediaBox. No se validó todavía en Chrome/Edge nativos ni en el hardware de referencia.

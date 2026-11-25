@@ -1,5 +1,13 @@
 # Changelog
 
+## Etapa 10
+
+- Añadido editor de márgenes físicos en milímetros que crea una CropBox por página, considerando UserUnit y la orientación cardinal efectiva. La caja se limita a la caja visible original de PDF.js; se puede restaurar con un comando reversible.
+- El visor sombrea el área excluida y las miniaturas identifican páginas con CropBox ajustada. El cambio modifica el estado del proyecto, no el PDF fuente; la exportación que materializa la caja se realizará en la Etapa 13 y no se elimina ni rasteriza contenido.
+- Añadidas pruebas de geometría con orígenes no nulos, UserUnit, cuatro rotaciones, validación de márgenes, historial, duplicación y flujo E2E con undo/redo, restauración, orientación y viewport móvil.
+- Validación: typecheck y lint correctos; 11 archivos de pruebas unitarias/componentes y 51 pruebas aprobadas; build correcto; 8 E2E aprobadas.
+- La CropBox editada solo puede reducir la caja visible original. La expansión hasta MediaBox, la escritura del PDF exportado, persistencia y validación en Chrome/Edge nativos quedan pendientes de etapas posteriores.
+
 ## Etapa 9
 
 - Añadido análisis cancelable por página de la orientación de texto digital. Solo se sugiere un giro cuando al menos 16 caracteres válidos comparten una dirección cardinal dominante (≥90 %); escritura vertical, poco texto, direcciones mixtas, inclinación no cardinal y páginas sin texto requieren revisión.

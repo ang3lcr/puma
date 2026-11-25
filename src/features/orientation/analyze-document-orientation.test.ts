@@ -8,6 +8,7 @@ const projectPage: ProjectPage = {
   documentId: 'document-1',
   sourcePageNumber: 1,
   rotationDeltaDegrees: 0,
+  cropBox: null,
   duplicatedFromPageId: null,
   isDeleted: false,
   blankAnalysis: null,

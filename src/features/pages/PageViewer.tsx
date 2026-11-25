@@ -3,6 +3,12 @@ import type { FormEvent, KeyboardEvent } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { es } from '../../i18n/es';
 import { formatNumber } from '../../i18n/format';
+import {
+  getPageMarginsMm,
+  isBoxInside,
+  readPdfBox,
+} from '../margins/geometry';
+import type { PageGeometry, PdfBox } from '../margins/types';
 import type {
   PageRenderQueue,
   RenderJobStatus,
@@ -15,17 +21,15 @@ const zoomStep = 0.25;
 const maxCanvasPixels = 16_777_216;
 const maxCanvasDimension = 8192;
 
-export interface PageInfo {
-  widthMillimeters: number;
-  heightMillimeters: number;
-  rotation: number;
-}
+export type PageInfo = PageGeometry;
 
 interface PageViewerProps {
   document: PDFDocumentProxy;
   pageId: string;
   sourcePageNumber: number;
   rotationDeltaDegrees: number;
+  pageGeometry: PageGeometry | null;
+  cropBox: PdfBox | null;
   pageNumber: number;
   pageCount: number;
   canMoveUp: boolean;
@@ -48,6 +52,7 @@ interface ViewportSize {
 }
 
 interface PageDimensions {
+  pageId: string;
   width: number;
   height: number;
 }
@@ -57,6 +62,8 @@ export function PageViewer({
   pageId,
   sourcePageNumber,
   rotationDeltaDegrees,
+  pageGeometry,
+  cropBox,
   pageNumber,
   pageCount,
   canMoveUp,
@@ -93,6 +100,8 @@ export function PageViewer({
     renderJobState.pageId === pageId
       ? renderJobState.status
       : 'queued';
+  const currentPageDimensions =
+    pageDimensions?.pageId === pageId ? pageDimensions : null;
 
   useEffect(() => {
     const element = viewerRef.current;
@@ -114,12 +123,14 @@ export function PageViewer({
   }, []);
 
   const fitZoom =
-    pageDimensions && viewportSize.width > 0 && viewportSize.height > 0
+    currentPageDimensions &&
+    viewportSize.width > 0 &&
+    viewportSize.height > 0
       ? Math.max(
           0.05,
           Math.min(
-            (viewportSize.width - 48) / pageDimensions.width,
-            (viewportSize.height - 48) / pageDimensions.height,
+            (viewportSize.width - 48) / currentPageDimensions.width,
+            (viewportSize.height - 48) / currentPageDimensions.height,
             maximumZoom,
           ),
         )
@@ -169,13 +180,17 @@ export function PageViewer({
             throw new Error('The PDF page area is invalid.');
           }
           setPageDimensions({
+            pageId,
             width: baseViewport.width,
             height: baseViewport.height,
           });
+          const viewBox = readPdfBox(page.view);
           onPageInfo(pageId, {
             widthMillimeters: (baseViewport.width * 25.4) / 72,
             heightMillimeters: (baseViewport.height * 25.4) / 72,
             rotation,
+            viewBox,
+            userUnit: page.userUnit,
           });
 
           const deviceScale = Math.min(window.devicePixelRatio || 1, 2);
@@ -241,6 +256,32 @@ export function PageViewer({
     viewportSize.height,
     viewportSize.width,
   ]);
+  const cropMargins =
+    cropBox &&
+    pageGeometry &&
+    isBoxInside(cropBox, pageGeometry.viewBox)
+      ? getPageMarginsMm(
+          pageGeometry.viewBox,
+          cropBox,
+          pageGeometry.userUnit,
+          pageGeometry.rotation,
+        )
+      : null;
+  const previewWidth = currentPageDimensions
+    ? currentPageDimensions.width * effectiveZoom
+    : 0;
+  const previewHeight = currentPageDimensions
+    ? currentPageDimensions.height * effectiveZoom
+    : 0;
+  const pixelsPerMillimeter = (72 / 25.4) * effectiveZoom;
+  const cropPixels = cropMargins
+    ? {
+        top: cropMargins.top * pixelsPerMillimeter,
+        right: cropMargins.right * pixelsPerMillimeter,
+        bottom: cropMargins.bottom * pixelsPerMillimeter,
+        left: cropMargins.left * pixelsPerMillimeter,
+      }
+    : null;
 
   function handleViewerKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.target !== event.currentTarget) {
@@ -454,10 +495,74 @@ export function PageViewer({
           </span>
         )}
         <div className="viewer-canvas-content">
-          <canvas
-            aria-label={`${es.viewer.pageCanvas}, ${es.viewer.pageNumber} ${formatNumber(pageNumber)} ${es.viewer.of} ${formatNumber(pageCount)}`}
-            role="img"
-          />
+          <div
+            className="viewer-page-frame"
+            style={
+              currentPageDimensions
+                ? {
+                    width: `${previewWidth}px`,
+                    height: `${previewHeight}px`,
+                  }
+                : undefined
+            }
+          >
+            <canvas
+              aria-label={`${es.viewer.pageCanvas}, ${es.viewer.pageNumber} ${formatNumber(pageNumber)} ${es.viewer.of} ${formatNumber(pageCount)}`}
+              role="img"
+            />
+            {cropPixels && (
+              <div className="crop-preview-overlay" aria-hidden="true">
+                {cropPixels.top > 0 && (
+                  <div
+                    className="crop-preview-shade"
+                    style={{ top: 0, left: 0, right: 0, height: cropPixels.top }}
+                  />
+                )}
+                {cropPixels.bottom > 0 && (
+                  <div
+                    className="crop-preview-shade"
+                    style={{
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: cropPixels.bottom,
+                    }}
+                  />
+                )}
+                {cropPixels.left > 0 && (
+                  <div
+                    className="crop-preview-shade"
+                    style={{
+                      top: cropPixels.top,
+                      bottom: cropPixels.bottom,
+                      left: 0,
+                      width: cropPixels.left,
+                    }}
+                  />
+                )}
+                {cropPixels.right > 0 && (
+                  <div
+                    className="crop-preview-shade"
+                    style={{
+                      top: cropPixels.top,
+                      bottom: cropPixels.bottom,
+                      right: 0,
+                      width: cropPixels.right,
+                    }}
+                  />
+                )}
+                <div
+                  className="crop-preview-border"
+                  style={{
+                    top: cropPixels.top,
+                    right: cropPixels.right,
+                    bottom: cropPixels.bottom,
+                    left: cropPixels.left,
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </section>

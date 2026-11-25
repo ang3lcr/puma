@@ -8,6 +8,7 @@ import {
   createProjectHistoryState,
   createRestorePageCommand,
   createRotatePageCommand,
+  createSetPageCropBoxCommand,
   createSetPageRotationsCommand,
   projectHistoryReducer,
 } from './project-store';
@@ -63,6 +64,7 @@ describe('project history', () => {
       documentId: 'document-1',
       sourcePageNumber: 2,
       rotationDeltaDegrees: 0,
+      cropBox: null,
       duplicatedFromPageId: null,
       isDeleted: false,
       blankAnalysis: null,
@@ -363,6 +365,70 @@ describe('project history', () => {
     expect(
       history.project.pages.get('document-1:page:3')?.rotationDeltaDegrees,
     ).toBe(270);
+  });
+
+  it('applies CropBox changes as reversible page commands and duplicates them', () => {
+    let history = projectHistoryReducer(createProjectHistoryState('project-1'), {
+      type: 'import-document',
+      document: createDocument('document-1', 1),
+    });
+    const cropBox = {
+      xMin: 12,
+      yMin: 18,
+      xMax: 600,
+      yMax: 780,
+    };
+    history = projectHistoryReducer(history, {
+      type: 'execute',
+      command: createSetPageCropBoxCommand(
+        history.project,
+        'document-1:page:1',
+        cropBox,
+      ),
+    });
+    expect(history.project.pages.get('document-1:page:1')?.cropBox).toEqual(
+      cropBox,
+    );
+
+    const duplicateCommand = createDuplicatePageCommand(
+      history.project,
+      'document-1:page:1',
+    );
+    const duplicateOperation = duplicateCommand.forward[0];
+    if (!duplicateOperation || duplicateOperation.type !== 'insert-page') {
+      throw new Error('The duplicate command did not insert its page.');
+    }
+    const duplicateId = duplicateOperation.page.id;
+    history = projectHistoryReducer(history, {
+      type: 'execute',
+      command: duplicateCommand,
+    });
+    expect(history.project.pages.get(duplicateId)?.cropBox).toEqual(cropBox);
+
+    history = projectHistoryReducer(history, { type: 'undo' });
+    expect(history.project.pages.get(duplicateId)).toBeUndefined();
+    history = projectHistoryReducer(history, { type: 'undo' });
+    expect(history.project.pages.get('document-1:page:1')?.cropBox).toBeNull();
+    history = projectHistoryReducer(history, { type: 'redo' });
+    expect(history.project.pages.get('document-1:page:1')?.cropBox).toEqual(
+      cropBox,
+    );
+  });
+
+  it('rejects invalid CropBox dimensions without changing project history', () => {
+    const history = projectHistoryReducer(createProjectHistoryState('project-1'), {
+      type: 'import-document',
+      document: createDocument('document-1', 1),
+    });
+
+    expect(() =>
+      createSetPageCropBoxCommand(
+        history.project,
+        'document-1:page:1',
+        { xMin: 10, yMin: 10, xMax: 10, yMax: 20 },
+      ),
+    ).toThrow('The page CropBox must have finite, positive dimensions.');
+    expect(history.undoStack).toHaveLength(1);
   });
 
   it('records orientation analysis outside undo history', () => {

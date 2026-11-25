@@ -3,6 +3,8 @@ import type {
   BlankPageAnalysis,
   BlankPageReviewDecision,
 } from '../features/blank-detection/types';
+import { isValidBox } from '../features/margins/geometry';
+import type { PdfBox } from '../features/margins/types';
 import type { OrientationAnalysis } from '../features/orientation/types';
 
 export type ProjectDocument = Omit<ImportedPdf, 'session'>;
@@ -12,6 +14,7 @@ export interface ProjectPage {
   readonly documentId: string;
   readonly sourcePageNumber: number;
   readonly rotationDeltaDegrees: number;
+  readonly cropBox: PdfBox | null;
   readonly duplicatedFromPageId: string | null;
   readonly isDeleted: boolean;
   readonly blankAnalysis: BlankPageAnalysis | null;
@@ -61,6 +64,11 @@ export type ProjectOperation =
       type: 'set-page-rotation';
       pageId: string;
       rotationDeltaDegrees: number;
+    }
+  | {
+      type: 'set-page-crop-box';
+      pageId: string;
+      cropBox: PdfBox | null;
     }
   | {
       type: 'set-page-blank-review';
@@ -157,6 +165,7 @@ export function createDocumentImportCommand(
     documentId: document.id,
     sourcePageNumber: index + 1,
     rotationDeltaDegrees: 0,
+    cropBox: null,
     duplicatedFromPageId: null,
     isDeleted: false,
     blankAnalysis: null,
@@ -331,6 +340,18 @@ export function applyProjectOperations(
         });
         break;
       }
+      case 'set-page-crop-box': {
+        const page = pages.get(operation.pageId);
+        if (!page) {
+          throw new Error(`Page "${operation.pageId}" is not in the project.`);
+        }
+        assertCropBox(operation.cropBox);
+        pages.set(page.id, {
+          ...page,
+          cropBox: operation.cropBox,
+        });
+        break;
+      }
       case 'set-page-blank-review': {
         const page = pages.get(operation.pageId);
         if (!page) {
@@ -463,6 +484,24 @@ export function createRotatePageCommand(
     [{ pageId, rotationDeltaDegrees }],
     'Girar página',
   );
+}
+
+export function createSetPageCropBoxCommand(
+  project: Project,
+  pageId: string,
+  cropBox: PdfBox | null,
+): ProjectCommand {
+  const page = requireActivePage(project, pageId);
+  assertCropBox(cropBox);
+  if (areCropBoxesEqual(page.cropBox, cropBox)) {
+    return emptyCommand('Aplicar recorte');
+  }
+
+  return {
+    label: 'Aplicar recorte',
+    forward: [{ type: 'set-page-crop-box', pageId, cropBox }],
+    inverse: [{ type: 'set-page-crop-box', pageId, cropBox: page.cropBox }],
+  };
 }
 
 export interface PageRotationChange {
@@ -665,6 +704,27 @@ function assertRotation(rotationDeltaDegrees: number): void {
   ) {
     throw new Error('Page rotation must be a quarter turn from 0 to 270 degrees.');
   }
+}
+
+function assertCropBox(cropBox: PdfBox | null): void {
+  if (cropBox !== null && !isValidBox(cropBox)) {
+    throw new Error('The page CropBox must have finite, positive dimensions.');
+  }
+}
+
+function areCropBoxesEqual(
+  left: PdfBox | null,
+  right: PdfBox | null,
+): boolean {
+  if (left === null || right === null) {
+    return left === right;
+  }
+  return (
+    left.xMin === right.xMin &&
+    left.yMin === right.yMin &&
+    left.xMax === right.xMax &&
+    left.yMax === right.yMax
+  );
 }
 
 function assertIndex(index: number, length: number): void {

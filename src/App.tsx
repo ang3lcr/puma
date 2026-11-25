@@ -12,6 +12,8 @@ import {
 import { ThumbnailList } from './features/pages/ThumbnailList';
 import { PageViewer } from './features/pages/PageViewer';
 import type { PageInfo } from './features/pages/PageViewer';
+import { MarginEditor } from './features/margins/MarginEditor';
+import type { PdfBox } from './features/margins/types';
 import { ByteLruCache } from './features/pages/thumbnail-cache';
 import {
   getBlankPageReasonLabel,
@@ -32,6 +34,7 @@ import {
   createProjectHistoryState,
   createRestorePageCommand,
   createRotatePageCommand,
+  createSetPageCropBoxCommand,
   createSetPageRotationsCommand,
   createSetBlankReviewDecisionCommand,
   getOrderedProjectDocuments,
@@ -257,6 +260,20 @@ function App() {
         projectHistory.project,
         currentProjectPage.id,
         degrees,
+      ),
+    });
+  }
+
+  function applySelectedPageCropBox(cropBox: PdfBox | null): void {
+    if (!currentProjectPage || isPageAnalysisRunning) {
+      return;
+    }
+    dispatchProject({
+      type: 'execute',
+      command: createSetPageCropBoxCommand(
+        projectHistory.project,
+        currentProjectPage.id,
+        cropBox,
       ),
     });
   }
@@ -1302,6 +1319,8 @@ function App() {
                 pageId={currentProjectPage.id}
                 sourcePageNumber={currentProjectPage.sourcePageNumber}
                 rotationDeltaDegrees={currentProjectPage.rotationDeltaDegrees}
+                pageGeometry={currentPageInfo}
+                cropBox={currentProjectPage.cropBox}
                 pageNumber={activePageNumber}
                 pageCount={activeDocumentPages.length}
                 canMoveUp={activePageNumber > 1}
@@ -1407,6 +1426,15 @@ function App() {
                     </div>
                   </dl>
                 </section>
+              )}
+              {currentProjectPage && (
+                <MarginEditor
+                  key={currentProjectPage.id}
+                  geometry={currentPageInfo}
+                  cropBox={currentProjectPage.cropBox}
+                  disabled={isPageAnalysisRunning}
+                  onApply={applySelectedPageCropBox}
+                />
               )}
               {currentProjectPage && (
                 <section
