@@ -1,5 +1,15 @@
 # Changelog
 
+## Etapa 8
+
+- Añadido análisis local, secuencial y cancelable de páginas: texto y anotaciones se identifican antes de rasterizar; las demás páginas se renderizan a una muestra acotada y los píxeles se clasifican en un Worker local.
+- Las páginas completamente blancas se marcan como posibles candidatas; contenido escaso o anotaciones requieren revisión. No se elimina ninguna página automáticamente y las decisiones manuales de conservar/confirmar son reversibles.
+- La cola de render prioriza la página visible, luego el análisis y finalmente las miniaturas. Las mutaciones del proyecto se desactivan durante el análisis.
+- Añadidas pruebas de clasificación, anotaciones, cancelación, registro/historial y E2E con PDF real de página vacía y texto. El porcentaje de confianza se omite: no existe corpus etiquetado para calibrarlo.
+- Validación: typecheck y lint correctos; 8 archivos de pruebas unitarias/componentes, 28 pruebas aprobadas; build correcto; 6 E2E aprobadas.
+- Bundle de producción: shell JS 305.58 kB / 93.33 kB gzip, CSS 17.38 kB / 4.00 kB gzip, módulo de análisis diferido 3.57 kB / 1.49 kB gzip, módulo PDF.js diferido 447.46 kB / 134.94 kB gzip y Workers locales de análisis (0.99 kB) y PDF.js (1,271.91 kB).
+- Los umbrales de falsos positivos/recall siguen sin demostrarse; requieren corpus etiquetado y validación en Chrome/Edge nativos sobre el hardware de referencia.
+
 ## Etapa 7 — 2026-11-25
 
 - Integradas operaciones reversibles para reordenar, duplicar, rotar 90° y eliminar/restaurar páginas en el documento de origen; los movimientos entre documentos quedan pospuestos a la Etapa 11.
@@ -7,7 +17,7 @@
 - Añadidas pruebas unitarias para orden e inversas con páginas eliminadas, duplicación/rotación/eliminación/restauración, historial y rechazo de movimientos entre documentos; E2E cubre el flujo de edición y undo/redo.
 - Validación: typecheck y lint correctos; 6 archivos de pruebas unitarias/componentes, 21 pruebas aprobadas; build correcto; 5 E2E aprobadas.
 - Bundle de producción: shell JS 298.61 kB / 91.57 kB gzip; CSS 16.16 kB / 3.84 kB gzip; módulo PDF.js diferido 447.46 kB / 134.94 kB gzip; Worker local 1,271.91 kB. Las métricas nativas de memoria/rendimiento de Chrome/Edge siguen pendientes.
-- Pendiente la aprobación de Etapa 7 antes de comenzar la Etapa 8.
+- Etapa 7 aprobada antes de comenzar la Etapa 8.
 
 ## Etapa 6 — 2026-11-25
 

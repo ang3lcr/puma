@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { es } from '../../i18n/es';
 import { formatNumber } from '../../i18n/format';
+import { getBlankPageStatusLabel } from '../blank-detection/presentation';
 import type { PageRenderQueue } from '../../pdf/page-render-queue';
 import { normalizePageRotation } from '../../pdf/page-rotation';
 import type { ProjectPage } from '../../store/project-store';
@@ -19,6 +20,7 @@ interface ThumbnailListProps {
   selectedPageId: string | null;
   onSelectPage: (pageId: string) => void;
   onRestorePage: (pageId: string) => void;
+  pageActionsDisabled: boolean;
   cache: ByteLruCache<string, ImageBitmap>;
   renderQueue: PageRenderQueue;
 }
@@ -30,6 +32,7 @@ export function ThumbnailList({
   selectedPageId,
   onSelectPage,
   onRestorePage,
+  pageActionsDisabled,
   cache,
   renderQueue,
 }: ThumbnailListProps) {
@@ -85,7 +88,31 @@ export function ThumbnailList({
       >
         {virtualizer.getVirtualItems().map((virtualItem) => {
           const page = getPageAt(virtualItem.index);
+          if (page.isDeleted) {
+            return (
+              <li
+                key={virtualItem.key}
+                className="thumbnail-virtual-row"
+                aria-posinset={virtualItem.index + 1}
+                aria-setsize={pages.length}
+                style={{
+                  height: `${virtualItem.size}px`,
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                <DeletedPageThumbnail
+                  page={page}
+                  projectPosition={virtualItem.index + 1}
+                  disabled={pageActionsDisabled}
+                  onRestore={onRestorePage}
+                />
+              </li>
+            );
+          }
           const displayPageNumber = activePageNumbers.get(page.id);
+          if (displayPageNumber === undefined) {
+            throw new Error(`Active thumbnail "${page.id}" has no page number.`);
+          }
           return (
             <li
               key={virtualItem.key}
@@ -97,24 +124,20 @@ export function ThumbnailList({
                 transform: `translateY(${virtualItem.start}px)`,
               }}
             >
-              {page.isDeleted ? (
-                <DeletedPageThumbnail
-                  page={page}
-                  projectPosition={virtualItem.index + 1}
-                  onRestore={onRestorePage}
-                />
-              ) : (
-                <PageThumbnail
-                  cache={cache}
-                  document={document}
-                  documentId={documentId}
-                  page={page}
-                  displayPageNumber={displayPageNumber ?? 0}
-                  selected={page.id === selectedPageId}
-                  onSelect={onSelectPage}
-                  renderQueue={renderQueue}
-                />
-              )}
+              <PageThumbnail
+                cache={cache}
+                document={document}
+                documentId={documentId}
+                page={page}
+                displayPageNumber={displayPageNumber}
+                analysisLabel={getBlankPageStatusLabel(
+                  page.blankAnalysis,
+                  page.blankReviewDecision,
+                )}
+                selected={page.id === selectedPageId}
+                onSelect={onSelectPage}
+                renderQueue={renderQueue}
+              />
             </li>
           );
         })}
@@ -126,12 +149,14 @@ export function ThumbnailList({
 interface DeletedPageThumbnailProps {
   page: ProjectPage;
   projectPosition: number;
+  disabled: boolean;
   onRestore: (pageId: string) => void;
 }
 
 function DeletedPageThumbnail({
   page,
   projectPosition,
+  disabled,
   onRestore,
 }: DeletedPageThumbnailProps) {
   return (
@@ -148,6 +173,7 @@ function DeletedPageThumbnail({
         className="thumbnail-restore"
         type="button"
         aria-label={`${es.pages.restore} ${formatNumber(projectPosition)}`}
+        disabled={disabled}
         onClick={() => onRestore(page.id)}
       >
         {es.pages.restore}
@@ -162,6 +188,7 @@ interface PageThumbnailProps {
   documentId: string;
   page: ProjectPage;
   displayPageNumber: number;
+  analysisLabel: string | null;
   selected: boolean;
   onSelect: (pageId: string) => void;
   renderQueue: PageRenderQueue;
@@ -173,6 +200,7 @@ function PageThumbnail({
   documentId,
   page,
   displayPageNumber,
+  analysisLabel,
   selected,
   onSelect,
   renderQueue,
@@ -340,6 +368,9 @@ function PageThumbnail({
       <figcaption>
         {es.documents.pageLabel} {formatNumber(displayPageNumber)}
       </figcaption>
+      {analysisLabel && (
+        <span className="thumbnail-analysis-label">{analysisLabel}</span>
+      )}
     </figure>
   );
 }

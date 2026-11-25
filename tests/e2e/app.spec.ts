@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { createMinimalPdf } from '../fixtures/minimal-pdf';
 import { createManyPagesPdf } from '../fixtures/many-pages-pdf';
 import { createPasswordProtectedPdf } from '../fixtures/password-protected-pdf';
+import { createBlankAndTextPdf } from '../fixtures/blank-and-text-pdf';
 
 test('initial workspace is usable and makes no external network requests', async ({
   page,
@@ -223,6 +224,46 @@ test('reorders, duplicates, rotates, deletes, and restores project pages', async
   await expect(page.locator('.statusbar')).toContainText('2 páginas');
   await expect(page.locator('.thumbnail-card-deleted')).toHaveCount(0);
 
+  expect(pageErrors).toEqual([]);
+});
+
+test('analyzes blank-page candidates and requires explicit review', async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.goto('/');
+  await page.getByLabel('Seleccionar PDF').setInputFiles({
+    name: 'blank-and-text.pdf',
+    mimeType: 'application/pdf',
+    buffer: createBlankAndTextPdf(),
+  });
+  await page.getByRole('button', { name: 'Analizar páginas en blanco' }).click();
+  await expect(page.locator('.blank-scan-status')).toContainText(
+    'Análisis terminado; revisa las etiquetas de las miniaturas.',
+  );
+  await expect(page.locator('.statusbar')).toContainText('2 páginas');
+
+  const review = page.getByRole('region', {
+    name: 'Detección de páginas en blanco',
+  });
+  await expect(review).toContainText('Posible página en blanco');
+  await expect(review).toContainText(
+    'No calibrada; falta un corpus etiquetado.',
+  );
+  await page.getByRole('button', { name: 'Confirmar como vacía' }).click();
+  await expect(review).toContainText('Confirmada como página en blanco');
+  await expect(page.locator('.statusbar')).toContainText('2 páginas');
+
+  await page.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(page.getByRole('button', { name: 'Confirmar como vacía' })).toBeVisible();
+  await page.getByRole('button', { name: 'Rehacer' }).click();
+  await expect(review).toContainText('Confirmada como página en blanco');
+
+  await page.getByRole('button', { name: 'Seleccionar página 2' }).click();
+  await expect(review).toContainText('Se detectó contenido');
+  await expect(review).toContainText('Se encontró texto en la página.');
   expect(pageErrors).toEqual([]);
 });
 

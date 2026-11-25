@@ -1,6 +1,6 @@
 # ADR 0002 — Operaciones de imagen iniciales
 
-- **Estado:** aprobado en Etapa 0; implementación/validación pendiente.
+- **Estado:** aprobado en Etapa 0 e implementado en Etapa 8; validación del detector contra corpus etiquetado pendiente.
 - **Fecha:** 2026-11-25.
 
 ## Contexto
@@ -22,3 +22,5 @@ Comenzar con operaciones de píxeles tipadas y pequeñas en Worker. No incluir O
 - Menos peso y trabajo de inicialización en el flujo normal.
 - La lógica de componentes conectados y filtros requerirá pruebas exhaustivas y fixtures etiquetados.
 - El spike de cuatro millones de píxeles no mide la precisión del detector de páginas en blanco.
+- La Etapa 8 usa un umbral de píxel sencillo sobre muestras locales de hasta 256 × 256. Texto y anotaciones evitan la clasificación automática como vacía; píxeles escasos requieren revisión y no se elimina ninguna página.
+- Sin un corpus etiquetado no se declaran falsos positivos, recall ni confianza calibrada; la salida es solo una sugerencia para revisión humana.

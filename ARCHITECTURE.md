@@ -1,13 +1,13 @@
 # Arquitectura propuesta
 
-**Estado:** arquitectura base aprobada en Etapa 0; etapas 1–6 aprobadas y Etapa 7 implementada, pendiente de aprobación. Persistencia de proyecto y exportación siguen pendientes de sus etapas.
+**Estado:** arquitectura base aprobada en Etapa 0; etapas 1–7 aprobadas y Etapa 8 implementada, pendiente de aprobación. Persistencia de proyecto y exportación siguen pendientes de sus etapas.
 
 ## Alcance técnico
 
 - Aplicación cliente con React, TypeScript estricto y Vite; sin backend, API, telemetría ni recursos de terceros en tiempo de ejecución.
 - Navegadores de producto: Chrome y Edge de escritorio, últimas dos versiones estables. El navegador integrado medido en el spike es Electron/Chromium y no sustituye la validación en esos productos.
 - PDF.js 6.5.438 para lectura, metadatos y renderizado; pdf-lib solo para generar o modificar exportaciones cuyo presupuesto de memoria sea seguro.
-- El Worker local de PDF.js atiende la lectura PDF; `PageRenderQueue` serializa los trabajos que usan canvas, prioriza la página visible sobre las miniaturas en espera y propaga cancelación. Los Workers de análisis visual se incorporarán en las etapas correspondientes.
+- El Worker local de PDF.js atiende la lectura PDF; `PageRenderQueue` serializa los trabajos que usan canvas, prioriza la página visible, luego el análisis y finalmente las miniaturas, y propaga cancelación. La Etapa 8 clasifica muestras de píxeles en un Worker local y no carga OpenCV.
 - IndexedDB conserva el estado pequeño del proyecto y, cuando el navegador lo permita, handles de archivos. Los bytes originales no se guardan automáticamente en IndexedDB.
 
 ## Límites establecidos por los spikes
@@ -61,9 +61,9 @@ La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniat
 ## Flujo de datos
 
 1. Importar uno o varios archivos sin alterar el original. PDF.js lee rangos y obtiene metadatos; el conteo de páginas no requiere renderizar todas las páginas. Solo se conserva abierta la sesión PDF del documento activo; al cambiar de documento se libera y el seleccionado se reabre desde su `File`.
-2. Renderizar miniaturas únicamente para las páginas próximas al viewport y renderizar en el visor solo la página seleccionada. La cola serializa las tareas de canvas y prioriza la página seleccionada. Texto digital se conserva como texto; imágenes y páginas mixtas no se rasterizan para analizarlas.
-3. Procesar imágenes de resolución reducida en Worker con un límite de concurrencia, cancelación, prioridades y mensajes tipados. Transferir buffers cuando sea seguro para evitar copias.
-4. Registrar sugerencias de análisis sin modificar el contenido. Ante baja confianza, marcar «Requiere revisión».
+2. Renderizar miniaturas únicamente para las páginas próximas al viewport y renderizar en el visor solo la página seleccionada. La cola serializa las tareas de canvas y prioriza la página seleccionada, luego el análisis y finalmente las miniaturas.
+3. Para la detección de páginas vacías, examinar texto y anotaciones antes de renderizar; cuando no existan, renderizar una muestra de hasta 256 × 256 píxeles y transferirla al Worker local. Procesar páginas secuencialmente y permitir cancelación. Una señal dispersa o una anotación requiere revisión manual.
+4. Registrar sugerencias de análisis sin modificar el contenido. No eliminar páginas automáticamente; las decisiones manuales son reversibles. La confianza no se presenta como porcentaje mientras el detector carezca de calibración con un corpus etiquetado.
 5. Registrar cada importación y operación de página como una orden reversible del proyecto. Ctrl/Cmd+Z deshace, Ctrl/Cmd+Shift+Z o Ctrl/Cmd+Y rehace; los campos editables conservan sus atajos nativos. El reordenamiento, duplicación, rotación y eliminación/restauración se aplican mediante deltas; los movimientos entre documentos se añaden en la Etapa 11.
 6. Estimar memoria antes de exportar. Crear el PDF completo en memoria con pdf-lib solo dentro del presupuesto; validar el buffer reabriéndolo con PDF.js y contar páginas antes de escribirlo a destino. Usar escritura temporal/atómica si la API disponible la admite. Si el presupuesto no alcanza, ofrecer archivos de salida por rangos o rechazar la exportación individual con un mensaje claro.
 

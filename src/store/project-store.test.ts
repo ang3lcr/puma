@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectDocument } from './project-store';
 import {
+  createSetBlankReviewDecisionCommand,
   createDeletePageCommand,
   createDuplicatePageCommand,
   createMovePageCommand,
@@ -63,6 +64,8 @@ describe('project history', () => {
       rotationDeltaDegrees: 0,
       duplicatedFromPageId: null,
       isDeleted: false,
+      blankAnalysis: null,
+      blankReviewDecision: null,
     });
 
     const undone = projectHistoryReducer(imported, { type: 'undo' });
@@ -268,5 +271,59 @@ describe('project history', () => {
       'document-1:page:1',
       'document-2:page:1',
     ]);
+  });
+
+  it('records blank analysis outside undo history and keeps review decisions reversible', () => {
+    let history = projectHistoryReducer(createProjectHistoryState('project-1'), {
+      type: 'import-document',
+      document: createDocument('document-1', 1),
+    });
+    const analysis = {
+      status: 'likely-blank' as const,
+      reason: 'no-visible-content' as const,
+      confidence: 0.99,
+      foregroundPixelCount: 0,
+      foregroundPixelRatio: 0,
+    };
+    history = projectHistoryReducer(history, {
+      type: 'record-page-blank-analysis',
+      pageId: 'document-1:page:1',
+      analysis,
+    });
+    expect(history.undoStack).toHaveLength(1);
+
+    history = projectHistoryReducer(history, {
+      type: 'execute',
+      command: createSetBlankReviewDecisionCommand(
+        history.project,
+        'document-1:page:1',
+        'confirmed-blank',
+      ),
+    });
+    expect(
+      history.project.pages.get('document-1:page:1')?.blankReviewDecision,
+    ).toBe('confirmed-blank');
+    expect(history.project.pages.get('document-1:page:1')?.isDeleted).toBe(
+      false,
+    );
+
+    history = projectHistoryReducer(history, { type: 'undo' });
+    expect(
+      history.project.pages.get('document-1:page:1')?.blankReviewDecision,
+    ).toBeNull();
+    history = projectHistoryReducer(history, { type: 'redo' });
+    expect(
+      history.project.pages.get('document-1:page:1')?.blankReviewDecision,
+    ).toBe('confirmed-blank');
+
+    history = projectHistoryReducer(history, {
+      type: 'record-page-blank-analysis',
+      pageId: 'document-1:page:1',
+      analysis: { ...analysis, confidence: 0.98 },
+    });
+    expect(
+      history.project.pages.get('document-1:page:1')?.blankReviewDecision,
+    ).toBe('confirmed-blank');
+    expect(history.undoStack).toHaveLength(2);
   });
 });

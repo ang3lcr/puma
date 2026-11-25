@@ -1,4 +1,4 @@
-export type RenderPriority = 'visible-page' | 'thumbnail';
+export type RenderPriority = 'visible-page' | 'analysis' | 'thumbnail';
 export type RenderJobStatus =
   | 'queued'
   | 'running'
@@ -175,5 +175,6 @@ export class PageRenderQueue {
 
 const priorityOrder: Record<RenderPriority, number> = {
   'visible-page': 0,
-  thumbnail: 1,
+  analysis: 1,
+  thumbnail: 2,
 };

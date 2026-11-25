@@ -1,4 +1,8 @@
 import type { ImportedPdf } from '../features/documents/pdf-import-types';
+import type {
+  BlankPageAnalysis,
+  BlankPageReviewDecision,
+} from '../features/blank-detection/types';
 
 export type ProjectDocument = Omit<ImportedPdf, 'session'>;
 
@@ -9,6 +13,8 @@ export interface ProjectPage {
   readonly rotationDeltaDegrees: number;
   readonly duplicatedFromPageId: string | null;
   readonly isDeleted: boolean;
+  readonly blankAnalysis: BlankPageAnalysis | null;
+  readonly blankReviewDecision: BlankPageReviewDecision | null;
 }
 
 export interface Project {
@@ -53,6 +59,11 @@ export type ProjectOperation =
       type: 'set-page-rotation';
       pageId: string;
       rotationDeltaDegrees: number;
+    }
+  | {
+      type: 'set-page-blank-review';
+      pageId: string;
+      decision: BlankPageReviewDecision | null;
     };
 
 export interface ProjectCommand {
@@ -70,6 +81,11 @@ export interface ProjectHistoryState {
 export type ProjectHistoryAction =
   | { type: 'import-document'; document: ProjectDocument }
   | { type: 'execute'; command: ProjectCommand }
+  | {
+      type: 'record-page-blank-analysis';
+      pageId: string;
+      analysis: BlankPageAnalysis;
+    }
   | { type: 'undo' }
   | { type: 'redo' };
 
@@ -136,6 +152,8 @@ export function createDocumentImportCommand(
     rotationDeltaDegrees: 0,
     duplicatedFromPageId: null,
     isDeleted: false,
+    blankAnalysis: null,
+    blankReviewDecision: null,
   }));
   const documentIndex = project.documentOrder.length;
   const firstPageIndex = project.pageOrder.length;
@@ -305,6 +323,17 @@ export function applyProjectOperations(
         });
         break;
       }
+      case 'set-page-blank-review': {
+        const page = pages.get(operation.pageId);
+        if (!page) {
+          throw new Error(`Page "${operation.pageId}" is not in the project.`);
+        }
+        pages.set(page.id, {
+          ...page,
+          blankReviewDecision: operation.decision,
+        });
+        break;
+      }
       default:
         assertNever(operation);
     }
@@ -390,6 +419,7 @@ export function createDuplicatePageCommand(
     id: `${page.documentId}:duplicate:${crypto.randomUUID()}`,
     duplicatedFromPageId: page.id,
     isDeleted: false,
+    blankReviewDecision: null,
   };
   return {
     label: 'Duplicar página',
@@ -433,6 +463,32 @@ export function createRotatePageCommand(
   };
 }
 
+export function createSetBlankReviewDecisionCommand(
+  project: Project,
+  pageId: string,
+  decision: BlankPageReviewDecision | null,
+): ProjectCommand {
+  const page = requireActivePage(project, pageId);
+  if (!page.blankAnalysis || page.blankAnalysis.status === 'content-detected') {
+    throw new Error(`Page "${pageId}" has no blank analysis to review.`);
+  }
+  if (page.blankReviewDecision === decision) {
+    return emptyCommand('Revisar página en blanco');
+  }
+
+  return {
+    label: 'Revisar página en blanco',
+    forward: [{ type: 'set-page-blank-review', pageId, decision }],
+    inverse: [
+      {
+        type: 'set-page-blank-review',
+        pageId,
+        decision: page.blankReviewDecision,
+      },
+    ],
+  };
+}
+
 export function projectHistoryReducer(
   state: ProjectHistoryState,
   action: ProjectHistoryAction,
@@ -444,6 +500,21 @@ export function projectHistoryReducer(
     }
     case 'execute':
       return executeCommand(state, action.command);
+    case 'record-page-blank-analysis': {
+      const page = state.project.pages.get(action.pageId);
+      if (!page) {
+        throw new Error(`Page "${action.pageId}" is not in the project.`);
+      }
+      const pages = new Map(state.project.pages);
+      pages.set(page.id, {
+        ...page,
+        blankAnalysis: action.analysis,
+      });
+      return {
+        ...state,
+        project: { ...state.project, pages },
+      };
+    }
     case 'undo': {
       const command = state.undoStack[state.undoStack.length - 1];
       if (!command) {

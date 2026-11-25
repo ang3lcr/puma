@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { PageRenderQueue } from './page-render-queue';
 
 describe('PageRenderQueue', () => {
-  it('runs visible page jobs before queued thumbnails and reports progress', async () => {
+  it('runs visible pages and analysis before queued thumbnails', async () => {
     const queue = new PageRenderQueue();
     const order: string[] = [];
     let releaseFirst!: () => void;
@@ -38,12 +38,23 @@ describe('PageRenderQueue', () => {
         order.push('visible-page');
       },
     });
+    const analysis = queue.enqueue({
+      priority: 'analysis',
+      run: async () => {
+        order.push('analysis');
+      },
+    });
 
     releaseFirst();
-    await Promise.all([first.promise, queuedThumbnail.promise, visiblePage.promise]);
+    await Promise.all([
+      first.promise,
+      queuedThumbnail.promise,
+      visiblePage.promise,
+      analysis.promise,
+    ]);
     await Promise.resolve();
 
-    expect(order).toEqual(['first', 'visible-page', 'thumbnail']);
+    expect(order).toEqual(['first', 'visible-page', 'analysis', 'thumbnail']);
     expect(firstStatuses).toEqual(['queued', 'running', 'completed']);
   });
 

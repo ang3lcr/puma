@@ -30,6 +30,7 @@ interface PageViewerProps {
   pageCount: number;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  pageActionsDisabled: boolean;
   onPageChange: (pageNumber: number) => void;
   onMovePage: (direction: 'up' | 'down') => void;
   onDuplicatePage: () => void;
@@ -60,6 +61,7 @@ export function PageViewer({
   pageCount,
   canMoveUp,
   canMoveDown,
+  pageActionsDisabled,
   onPageChange,
   onMovePage,
   onDuplicatePage,
@@ -294,7 +296,7 @@ export function PageViewer({
             type="button"
             aria-label={es.pages.moveUp}
             title={es.pages.moveUp}
-            disabled={!canMoveUp}
+            disabled={pageActionsDisabled || !canMoveUp}
             onClick={() => onMovePage('up')}
           >
             ↑
@@ -304,7 +306,7 @@ export function PageViewer({
             type="button"
             aria-label={es.pages.moveDown}
             title={es.pages.moveDown}
-            disabled={!canMoveDown}
+            disabled={pageActionsDisabled || !canMoveDown}
             onClick={() => onMovePage('down')}
           >
             ↓
@@ -314,6 +316,7 @@ export function PageViewer({
             type="button"
             aria-label={es.pages.duplicate}
             title={es.pages.duplicate}
+            disabled={pageActionsDisabled}
             onClick={onDuplicatePage}
           >
             +
@@ -323,6 +326,7 @@ export function PageViewer({
             type="button"
             aria-label={es.pages.rotate}
             title={es.pages.rotate}
+            disabled={pageActionsDisabled}
             onClick={onRotatePage}
           >
             ↻
@@ -332,6 +336,7 @@ export function PageViewer({
             type="button"
             aria-label={es.pages.delete}
             title={es.pages.delete}
+            disabled={pageActionsDisabled}
             onClick={onDeletePage}
           >
             ×

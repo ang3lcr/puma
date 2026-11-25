@@ -13,6 +13,11 @@ import { ThumbnailList } from './features/pages/ThumbnailList';
 import { PageViewer } from './features/pages/PageViewer';
 import type { PageInfo } from './features/pages/PageViewer';
 import { ByteLruCache } from './features/pages/thumbnail-cache';
+import {
+  getBlankPageReasonLabel,
+  getBlankPageStatusLabel,
+} from './features/blank-detection/presentation';
+import type { BlankPageReviewDecision } from './features/blank-detection/types';
 import { es } from './i18n/es';
 import { formatBytes, formatNumber } from './i18n/format';
 import { PageRenderQueue } from './pdf/page-render-queue';
@@ -23,6 +28,7 @@ import {
   createProjectHistoryState,
   createRestorePageCommand,
   createRotatePageCommand,
+  createSetBlankReviewDecisionCommand,
   getOrderedProjectDocuments,
   getOrderedProjectPages,
   projectHistoryReducer,
@@ -57,6 +63,13 @@ interface ActivePdfSession {
   session: PdfDocumentSession;
 }
 
+interface BlankScanState {
+  documentId: string;
+  status: 'running' | 'completed' | 'cancelled' | 'failed';
+  completed: number;
+  total: number;
+}
+
 function App() {
   const [theme, setTheme] = useState<Theme>('dark');
   const [projectHistory, dispatchProject] = useReducer(
@@ -71,6 +84,7 @@ function App() {
   const [activePageInfo, setActivePageInfo] = useState<
     (PageInfo & { pageId: string }) | null
   >(null);
+  const [blankScan, setBlankScan] = useState<BlankScanState | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isOpeningDocument, setIsOpeningDocument] = useState(false);
   const [activePdfSession, setActivePdfSession] =
@@ -97,6 +111,7 @@ function App() {
   const passwordDialogRef = useRef<HTMLDivElement>(null);
   const fullReadDialogRef = useRef<HTMLDivElement>(null);
   const importRunning = useRef(false);
+  const blankScanAbort = useRef<AbortController | null>(null);
   const isDark = theme === 'dark';
   const isLoadingDocument = isImporting || isOpeningDocument;
   const activeDocument = documents.find(
@@ -121,6 +136,8 @@ function App() {
     activePdfSession?.documentId === activeDocumentId
       ? activePdfSession.session
       : null;
+  const isBlankScanRunning =
+    blankScan?.documentId === activeDocumentId && blankScan.status === 'running';
   const currentPageInfo =
     activePageInfo?.pageId === currentProjectPage?.id ? activePageInfo : null;
   const totalPages = projectPages.filter((page) => !page.isDeleted).length;
@@ -131,7 +148,17 @@ function App() {
     [],
   );
 
+  const redoProjectChange = useCallback((): void => {
+    if (isBlankScanRunning) {
+      return;
+    }
+    dispatchProject({ type: 'redo' });
+  }, [dispatchProject, isBlankScanRunning]);
+
   const undoProjectChange = useCallback((): void => {
+    if (isBlankScanRunning) {
+      return;
+    }
     const command = projectHistory.undoStack.at(-1);
     if (!command) {
       return;
@@ -151,11 +178,12 @@ function App() {
       setActivePdfSession(null);
     }
     dispatchProject({ type: 'undo' });
-  }, [activeDocumentId, dispatchProject, projectHistory.undoStack]);
-
-  const redoProjectChange = useCallback((): void => {
-    dispatchProject({ type: 'redo' });
-  }, [dispatchProject]);
+  }, [
+    activeDocumentId,
+    dispatchProject,
+    isBlankScanRunning,
+    projectHistory.undoStack,
+  ]);
 
   function moveSelectedPage(direction: 'up' | 'down'): void {
     if (!currentProjectPage) {
@@ -224,6 +252,104 @@ function App() {
       command: createRestorePageCommand(projectHistory.project, pageId),
     });
     setActivePageId(pageId);
+  }
+
+  async function runBlankScan(): Promise<void> {
+    if (
+      !activeDocument ||
+      !activeSession ||
+      activeDocumentPages.length === 0 ||
+      isBlankScanRunning
+    ) {
+      return;
+    }
+
+    blankScanAbort.current?.abort();
+    const controller = new AbortController();
+    blankScanAbort.current = controller;
+    const documentId = activeDocument.id;
+    const pages = activeDocumentPages;
+    let completed = 0;
+    setBlankScan({
+      documentId,
+      status: 'running',
+      completed,
+      total: pages.length,
+    });
+
+    try {
+      const { analyzeDocumentPages } = await import(
+        './features/blank-detection/analyze-document'
+      );
+      const result = await analyzeDocumentPages({
+        document: activeSession.document,
+        pages,
+        renderQueue,
+        signal: controller.signal,
+        onPageAnalysis: (pageId, analysis) => {
+          dispatchProject({
+            type: 'record-page-blank-analysis',
+            pageId,
+            analysis,
+          });
+        },
+        onProgress: (progress) => {
+          completed = progress.completed;
+          setBlankScan((current) =>
+            current?.documentId === documentId
+              ? { ...current, completed }
+              : current,
+          );
+        },
+      });
+      setBlankScan({
+        documentId,
+        status: result,
+        completed,
+        total: pages.length,
+      });
+    } catch (error) {
+      if (controller.signal.aborted || isAbortError(error)) {
+        setBlankScan({
+          documentId,
+          status: 'cancelled',
+          completed,
+          total: pages.length,
+        });
+      } else {
+        console.error('Unable to complete blank-page analysis.', error);
+        setBlankScan({
+          documentId,
+          status: 'failed',
+          completed,
+          total: pages.length,
+        });
+      }
+    } finally {
+      if (blankScanAbort.current === controller) {
+        blankScanAbort.current = null;
+      }
+    }
+  }
+
+  function reviewSelectedPage(
+    decision: BlankPageReviewDecision | null,
+  ): void {
+    if (!currentProjectPage || isBlankScanRunning) {
+      return;
+    }
+    dispatchProject({
+      type: 'execute',
+      command: createSetBlankReviewDecisionCommand(
+        projectHistory.project,
+        currentProjectPage.id,
+        decision,
+      ),
+    });
+  }
+
+  function cancelBlankScan(): void {
+    blankScanAbort.current?.abort();
   }
 
   useEffect(() => {
@@ -307,6 +433,10 @@ function App() {
     };
   }, [renderQueue]);
 
+  useEffect(() => {
+    return () => blankScanAbort.current?.abort();
+  }, []);
+
   function requestDocumentPassword(
     fileName: string,
     reason: PasswordReason,
@@ -327,7 +457,11 @@ function App() {
   }
 
   async function importFiles(files: File[]): Promise<void> {
-    if (files.length === 0 || importRunning.current) {
+    if (
+      files.length === 0 ||
+      importRunning.current ||
+      isBlankScanRunning
+    ) {
       return;
     }
 
@@ -386,6 +520,7 @@ function App() {
   async function selectDocument(document: ProjectDocument): Promise<void> {
     if (
       isLoadingDocument ||
+      isBlankScanRunning ||
       importRunning.current ||
       activePdfSession?.documentId === document.id
     ) {
@@ -446,7 +581,7 @@ function App() {
 
   function handleDrop(event: DragEvent<HTMLElement>): void {
     event.preventDefault();
-    if (!isLoadingDocument) {
+    if (!isLoadingDocument && !isBlankScanRunning) {
       void importFiles(Array.from(event.dataTransfer.files));
     }
   }
@@ -619,7 +754,9 @@ function App() {
               type="button"
               aria-label={es.history.undo}
               title={es.history.undo}
-              disabled={projectHistory.undoStack.length === 0}
+              disabled={
+                isBlankScanRunning || projectHistory.undoStack.length === 0
+              }
               onClick={undoProjectChange}
             >
               <span aria-hidden="true">↶</span>
@@ -630,7 +767,9 @@ function App() {
               type="button"
               aria-label={es.history.redo}
               title={es.history.redo}
-              disabled={projectHistory.redoStack.length === 0}
+              disabled={
+                isBlankScanRunning || projectHistory.redoStack.length === 0
+              }
               onClick={redoProjectChange}
             >
               <span aria-hidden="true">↷</span>
@@ -689,7 +828,7 @@ function App() {
                       className="document-list-item"
                       type="button"
                       aria-pressed={document.id === activeDocumentId}
-                      disabled={isLoadingDocument}
+                      disabled={isLoadingDocument || isBlankScanRunning}
                       onClick={() => void selectDocument(document)}
                     >
                       <span className="document-list-name">
@@ -709,7 +848,52 @@ function App() {
           <section className="thumbnail-section" aria-labelledby="pages-heading">
             <div className="panel-title-row">
               <h2 id="pages-heading">{es.documents.pagesHeading}</h2>
+              {activeSession && (
+                <button
+                  className="blank-scan-button"
+                  type="button"
+                  disabled={
+                    !isBlankScanRunning && activeDocumentPages.length === 0
+                  }
+                  onClick={() =>
+                    isBlankScanRunning
+                      ? cancelBlankScan()
+                      : void runBlankScan()
+                  }
+                >
+                  {isBlankScanRunning
+                    ? es.blankDetection.cancel
+                    : es.blankDetection.scan}
+                </button>
+              )}
             </div>
+            {activeDocument &&
+              blankScan?.documentId === activeDocument.id && (
+                <div className="blank-scan-status">
+                  {blankScan.status === 'running' ? (
+                    <>
+                      <p role="status">
+                        {es.blankDetection.scanning}:{' '}
+                        {formatNumber(blankScan.completed)} /{' '}
+                        {formatNumber(blankScan.total)}
+                      </p>
+                      <progress
+                        aria-label={es.blankDetection.progress}
+                        max={blankScan.total}
+                        value={blankScan.completed}
+                      />
+                    </>
+                  ) : (
+                    <p role={blankScan.status === 'failed' ? 'alert' : 'status'}>
+                      {blankScan.status === 'completed'
+                        ? es.blankDetection.scanComplete
+                        : blankScan.status === 'cancelled'
+                          ? es.blankDetection.scanCancelled
+                          : es.blankDetection.scanFailed}
+                    </p>
+                  )}
+                </div>
+              )}
             {activeDocument && activeSession ? (
               <ThumbnailList
                 key={activeDocument.id}
@@ -720,6 +904,7 @@ function App() {
                 selectedPageId={selectedPageId}
                 onSelectPage={setActivePageId}
                 onRestorePage={restorePage}
+                pageActionsDisabled={isBlankScanRunning}
                 renderQueue={renderQueue}
               />
             ) : (
@@ -747,7 +932,7 @@ function App() {
             accept="application/pdf,.pdf"
             multiple
             aria-label={es.documents.importButton}
-            disabled={isLoadingDocument}
+            disabled={isLoadingDocument || isBlankScanRunning}
             onChange={handleFileInputChange}
           />
           <div className="workspace-header">
@@ -803,6 +988,7 @@ function App() {
                 pageCount={activeDocumentPages.length}
                 canMoveUp={activePageNumber > 1}
                 canMoveDown={activePageNumber < activeDocumentPages.length}
+                pageActionsDisabled={isBlankScanRunning}
                 onPageChange={(pageNumber) =>
                   setActivePageId(activeDocumentPages[pageNumber - 1]?.id ?? null)
                 }
@@ -812,7 +998,7 @@ function App() {
                 onDeletePage={deleteSelectedPage}
                 onPageInfo={updatePageInfo}
                 onImport={() => fileInputRef.current?.click()}
-                importDisabled={isLoadingDocument}
+                importDisabled={isLoadingDocument || isBlankScanRunning}
                 renderQueue={renderQueue}
               />
             ) : (
@@ -841,7 +1027,7 @@ function App() {
                     <button
                       className="import-button"
                       type="button"
-                      disabled={isLoadingDocument}
+                      disabled={isLoadingDocument || isBlankScanRunning}
                       onClick={() => fileInputRef.current?.click()}
                     >
                       {es.documents.importButton}
@@ -902,6 +1088,77 @@ function App() {
                       <dd>{formatNumber(currentPageInfo.rotation)}°</dd>
                     </div>
                   </dl>
+                </section>
+              )}
+              {currentProjectPage && (
+                <section
+                  className="blank-review-properties"
+                  aria-label={es.blankDetection.region}
+                >
+                  <h3>{es.blankDetection.reviewHeading}</h3>
+                  {currentProjectPage.blankAnalysis ? (
+                    <>
+                      <p className="blank-analysis-status">
+                        {getBlankPageStatusLabel(
+                          currentProjectPage.blankAnalysis,
+                          currentProjectPage.blankReviewDecision,
+                        )}
+                      </p>
+                      <p>
+                        {getBlankPageReasonLabel(
+                          currentProjectPage.blankAnalysis,
+                        )}
+                      </p>
+                      <p>
+                        {es.blankDetection.confidence}:{' '}
+                        {currentProjectPage.blankAnalysis.confidence ===
+                        null
+                          ? es.blankDetection.confidenceNotCalibrated
+                          : `${formatNumber(
+                              currentProjectPage.blankAnalysis.confidence * 100,
+                              { maximumFractionDigits: 0 },
+                            )}%`}
+                      </p>
+                      {currentProjectPage.blankAnalysis.status !==
+                        'content-detected' &&
+                        (currentProjectPage.blankReviewDecision ? (
+                          <button
+                            className="blank-review-button"
+                            type="button"
+                            disabled={isBlankScanRunning}
+                            onClick={() => reviewSelectedPage(null)}
+                          >
+                            {es.blankDetection.clearDecision}
+                          </button>
+                        ) : (
+                          <div className="blank-review-actions">
+                            <button
+                              className="blank-review-button"
+                              type="button"
+                              disabled={isBlankScanRunning}
+                              onClick={() =>
+                                reviewSelectedPage('confirmed-blank')
+                              }
+                            >
+                              {es.blankDetection.confirmBlank}
+                            </button>
+                            <button
+                              className="blank-review-button"
+                              type="button"
+                              disabled={isBlankScanRunning}
+                              onClick={() => reviewSelectedPage('keep')}
+                            >
+                              {es.blankDetection.keep}
+                            </button>
+                          </div>
+                        ))}
+                      <p className="blank-review-disclaimer">
+                        {es.blankDetection.manualOnly}
+                      </p>
+                    </>
+                  ) : (
+                    <p>{es.blankDetection.notAnalyzed}</p>
+                  )}
                 </section>
               )}
             </div>
@@ -1027,6 +1284,10 @@ function App() {
 
 function safeFileName(fileName: string): string {
   return sanitizeText(fileName, 255) ?? 'documento.pdf';
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
 }
 
 function getImportFailureMessage(error: unknown): string {

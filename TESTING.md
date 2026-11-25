@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–6 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–8 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
 
 ## Entorno de referencia
 
@@ -134,3 +134,16 @@ Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 
 | `npm run test:e2e` | 5 E2E aprobadas; incluye reordenar, duplicar, girar, eliminar/restaurar y undo/redo, además de CSP, importación local, virtualización y contraseña |
 
 El reordenamiento conserva el documento y número fuente; la rotación se refleja en miniaturas y visor, y la eliminación es lógica para permitir restauración y undo/redo. La validación no mide rendimiento/memoria en PDFs grandes ni en instalaciones nativas de Chrome/Edge; esos criterios continúan pendientes.
+
+## Validación de Etapa 8
+
+Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 1.65.1 y Chromium 159.0.8154.6:
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm test` | 8 archivos, 28 pruebas aprobadas; incluye clasificador de píxeles, guardas de anotaciones, cancelación, cola, historial y UI |
+| `npm run test:e2e` | Build correcto; 6 E2E aprobadas, incluida detección en PDF real, revisión reversible y conservación del número de páginas |
+
+El fixture E2E confirma que una página blanca se marca como candidata y una página con texto se clasifica como contenido. Las anotaciones se envían a revisión sin rasterizar; una cancelación durante la lectura de texto detiene el análisis. El detector procesa secuencialmente y la clasificación de píxeles corre en Worker local. No se midieron falsos positivos/recall, memoria ni tareas largas: no hay corpus etiquetado y siguen pendientes las pruebas de Chrome/Edge nativos en hardware de referencia.
