@@ -4,7 +4,7 @@ Document Studio es una aplicación de escritorio web, local y sin backend para r
 
 ## Estado
 
-**Etapa 1 completada, pendiente de aprobación.** Base React + TypeScript estricto, herramientas de calidad y shell inicial de escritorio. La importación de PDF todavía no está implementada; corresponde a la Etapa 2.
+**Etapa 2 completada, pendiente de aprobación.** La aplicación importa PDFs locales con PDF.js, lee metadatos y recuento de páginas, y gestiona archivos cifrados. No renderiza ni modifica páginas todavía; esas funciones pertenecen a las etapas siguientes.
 
 ## Revisión
 
@@ -47,6 +47,12 @@ npm run test:e2e
 
 La suite E2E usa Playwright Chromium y prueba el build de producción mediante `vite preview`. Para un hosting estático, `public/_headers` define las cabeceras CSP y de seguridad en proveedores que soportan ese formato; en otros hostings hay que configurar las mismas cabeceras HTTP. El servidor de desarrollo permite recursos inline/blob solo para React Fast Refresh y HMR de Vite; preview y producción no permiten `unsafe-inline` ni Workers `blob:`.
 
-## Alcance de esta etapa
+## Importación local
 
-El diseño y las decisiones de la Etapa 0 fueron aprobados. Se conservan el objetivo de prueba de 4 núcleos/8 GiB y los umbrales de [TESTING.md](./TESTING.md), que todavía deben validarse en Chrome/Edge cuando ese hardware/navegador esté disponible. La Etapa 1 no inicia importación, análisis, manipulación ni exportación de PDF.
+Selecciona uno o varios PDFs o arrástralos al espacio de trabajo. PDF.js lee rangos desde el `File` original y mantiene su procesamiento en el equipo. La aplicación solicita la contraseña de documentos cifrados sin guardarla; metadatos y nombres se muestran como texto. Si un PDF de al menos 400 MiB requiere leer el 95 % o más del archivo, se solicita confirmación antes de continuar.
+
+La referencia al `File` dura solo durante la sesión. Al recargar el navegador hay que volver a seleccionar los archivos; persistencia de handles y recuperación pertenecen a la Etapa 12. Importar no modifica el original ni crea una exportación. Miniaturas y renderizado se incorporarán en la Etapa 3.
+
+## Alcance de las etapas
+
+El diseño y las decisiones de la Etapa 0 fueron aprobados. Se conservan el objetivo de prueba de 4 núcleos/8 GiB y los umbrales de [TESTING.md](./TESTING.md), que todavía deben validarse en Chrome/Edge cuando ese hardware/navegador esté disponible. La Etapa 1 entregó únicamente la shell; la Etapa 2 añade importación/lectura sin edición, análisis visual ni exportación.

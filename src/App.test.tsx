@@ -1,10 +1,20 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { importPdfFile } from './features/documents/pdf-import';
+import { PdfImportError } from './features/documents/pdf-import-error';
 import App from './App';
 
+vi.mock('./features/documents/pdf-import', () => ({
+  importPdfFile: vi.fn(),
+}));
+
 describe('Document Studio initial workspace', () => {
-  it('renders the Spanish document workspace and local empty states', () => {
+  beforeEach(() => {
+    vi.mocked(importPdfFile).mockReset();
+  });
+
+  it('renders the Spanish workspace and local PDF import controls', () => {
     render(<App />);
 
     expect(
@@ -14,7 +24,14 @@ describe('Document Studio initial workspace', () => {
       screen.getByRole('heading', { name: 'Documentos' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('La importación estará disponible en la Etapa 2.'),
+      screen.getByRole('button', { name: 'Seleccionar PDF' }),
+    ).toBeEnabled();
+    expect(screen.getByLabelText('Seleccionar PDF')).toHaveAttribute(
+      'accept',
+      'application/pdf,.pdf',
+    );
+    expect(
+      screen.getByText('Los originales permanecen en este dispositivo.'),
     ).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Archivos locales');
   });
@@ -36,5 +53,31 @@ describe('Document Studio initial workspace', () => {
     expect(
       screen.getByRole('button', { name: 'Cambiar a tema oscuro' }),
     ).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('asks before continuing a potentially memory-intensive full read', async () => {
+    const user = userEvent.setup();
+    const mockImport = vi.mocked(importPdfFile);
+    mockImport.mockImplementation(async (file, options) => {
+      const confirmed = await options.confirmFullRead(file.size);
+      throw new PdfImportError(
+        confirmed ? 'read-failed' : 'full-read-cancelled',
+      );
+    });
+
+    render(<App />);
+    await user.upload(
+      screen.getByLabelText('Seleccionar PDF'),
+      new File(['abc'], 'large.pdf', { type: 'application/pdf' }),
+    );
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Lectura extensa del PDF',
+    });
+    expect(dialog).toHaveTextContent('3 B');
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Se canceló la lectura porque el PDF requería acceder a casi todo el archivo.',
+    );
   });
 });

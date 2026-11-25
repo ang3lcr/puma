@@ -1,18 +1,18 @@
 # Arquitectura propuesta
 
-**Estado:** base aprobada en Etapa 0. La shell inicial se implementa en Etapa 1; las funciones PDF siguen pendientes de sus etapas respectivas.
+**Estado:** arquitectura base aprobada en Etapa 0; shell aprobada en Etapa 1; importación local y metadatos implementados en Etapa 2. Miniaturas, edición, persistencia de proyecto y exportación siguen pendientes de sus etapas.
 
 ## Alcance técnico
 
 - Aplicación cliente con React, TypeScript estricto y Vite; sin backend, API, telemetría ni recursos de terceros en tiempo de ejecución.
 - Navegadores de producto: Chrome y Edge de escritorio, últimas dos versiones estables. El navegador integrado medido en el spike es Electron/Chromium y no sustituye la validación en esos productos.
-- PDF.js para lectura, metadatos y renderizado; pdf-lib solo para generar o modificar exportaciones cuyo presupuesto de memoria sea seguro.
+- PDF.js 6.5.438 para lectura, metadatos y renderizado; pdf-lib solo para generar o modificar exportaciones cuyo presupuesto de memoria sea seguro.
 - Web Workers para lectura por rangos, miniaturas y análisis visual. La vista visible tiene prioridad sobre el análisis masivo.
 - IndexedDB conserva el estado pequeño del proyecto y, cuando el navegador lo permita, handles de archivos. Los bytes originales no se guardan automáticamente en IndexedDB.
 
 ## Límites establecidos por los spikes
 
-1. **PDF.js:** para fuentes locales usar un `PDFDataRangeTransport` que responda las solicitudes de PDF.js con `Blob.slice()`. En un PDF sintético de 500 MiB, el spike leyó 131,500 bytes en dos rangos y obtuvo el número de páginas en 120 ms. No se garantiza el mismo volumen para todos los PDF. Si el archivo requiere lectura completa y la estimación es riesgosa, advertir o detener la operación.
+1. **PDF.js:** para fuentes locales usar un `PDFDataRangeTransport` que responda las solicitudes de PDF.js con `Blob.slice()`. La implementación usa rangos de 64 KiB, desactiva precarga automática y streaming, y confirma antes de satisfacer rangos que llevarían a leer al menos el 95 % de un archivo de 400 MiB o más. El umbral es una protección heurística, no una garantía de memoria. En un PDF sintético de 500 MiB, el spike leyó 131,500 bytes en dos rangos y obtuvo el número de páginas en 120 ms; no se garantiza el mismo volumen para todos los PDF.
 2. **pdf-lib:** no es una solución de streaming. La copia y el guardado mantienen un buffer de salida completo. En el fixture de 500 MiB se midieron 1,050.8 MiB RSS en el punto de guardado. Se propone un presupuesto inicial conservador de `300 MiB + 3 × tamaño mayor entre entrada y salida estimada`; es una cota heurística, no una garantía. Con el límite de pestaña propuesto de 1.5 GiB, una exportación individual de más de aproximadamente 400 MiB deberá advertir y ofrecer exportación por partes. La estrategia exacta queda pendiente de aprobación y validación en Chrome/Edge.
 3. **OpenCV.js:** no se propone como dependencia inicial. En el spike, el archivo pesó 13.3 MB (3.76 MB gzip), tardó 338 ms en inicializarse en Worker y fue más lento que un bucle sencillo sobre `ImageData` para umbralizar y contar 4.19 MP. Se comienza con operaciones locales de píxeles; reconsiderar OpenCV si una operación concreta demuestra una mejora medida.
 4. **Tesseract OSD:** candidato opcional, de carga diferida y totalmente local. En cuatro imágenes sintéticas corrigió las cuatro orientaciones, pero tardó 367–936 ms por página y requiere un núcleo legacy y datos OSD. No habilitar correcciones automáticas basándose solo en ese conjunto.
@@ -70,7 +70,8 @@ La lista larga se virtualiza; se renderizan miniaturas bajo demanda y como máxi
 ## Seguridad, privacidad y compatibilidad
 
 - CSP estricta servida también como cabecera HTTP: recursos solo del mismo origen, sin CDN, telemetría, `eval` o `object-src`; permitir únicamente los esquemas locales imprescindibles para PDF/Workers después de validarlos. La política de desarrollo permite scripts/estilos inline y Workers `blob:` solo para React Fast Refresh/HMR de Vite; preview y hosting de producción no permiten `unsafe-inline` ni `blob:` para Workers. Usar rutas locales de Worker.
-- PDF.js se configura con `isEvalSupported: false`. No se ejecutan acciones ni JavaScript del PDF; se informa de la presencia de características no conservadas.
+- La versión integrada de PDF.js no expone `isEvalSupported` en su API. Se usa sin el Viewer ni el gestor de scripting; la comprobación del bundle fijado no encontró llamadas a `eval()` ni `new Function()`. No se ejecutan acciones ni JavaScript del PDF.
+- La importación retiene el `File` durante la sesión, sin copiar el archivo a IndexedDB. El `PDFDocumentLoadingTask` se destruye tras leer metadatos; la Etapa 3 volverá a abrir la fuente para renderizar bajo demanda. La fuente se debe volver a seleccionar tras recargar; la persistencia de handles se implementará con el almacenamiento del proyecto.
 - Escapar nombres, metadatos y mensajes procedentes de PDF. No insertar HTML proporcionado por documentos.
 - La File System Access API es específica de Chromium. Si no está disponible, pedir que se vuelva a seleccionar la fuente después de recargar. OPFS e IndexedDB están sujetos a cuota y evicción; consultar `navigator.storage.estimate()` y manejar errores explícitamente.
 - Las firmas digitales dejan de ser válidas tras modificar o combinar el PDF. Formularios, anotaciones, marcadores, capas, adjuntos, etiquetas y restricciones de permisos se evalúan y documentan antes de exportar; no prometer preservación no comprobada.

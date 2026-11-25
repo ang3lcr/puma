@@ -1,12 +1,305 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { DragEvent, FormEvent, KeyboardEvent } from 'react';
+import {
+  PdfImportError,
+  sanitizeText,
+} from './features/documents/pdf-import-error';
+import {
+  type ImportedPdf,
+  type PasswordReason,
+  type PdfImportProgress,
+} from './features/documents/pdf-import-types';
 import { es } from './i18n/es';
-import { formatNumber } from './i18n/format';
+import { formatBytes, formatNumber } from './i18n/format';
 
 type Theme = 'dark' | 'light';
 
+interface ImportFailure {
+  fileName: string;
+  message: string;
+}
+
+interface ImportProgressState extends PdfImportProgress {
+  fileName: string;
+}
+
+interface PasswordRequest {
+  fileName: string;
+  reason: PasswordReason;
+  resolve: (password: string | null) => void;
+}
+
+interface FullReadRequest {
+  fileName: string;
+  fileSize: number;
+  resolve: (confirmed: boolean) => void;
+}
+
 function App() {
   const [theme, setTheme] = useState<Theme>('dark');
+  const [documents, setDocuments] = useState<ImportedPdf[]>([]);
+  const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [progress, setProgress] = useState<ImportProgressState | null>(null);
+  const [importFailures, setImportFailures] = useState<ImportFailure[]>([]);
+  const [passwordRequest, setPasswordRequest] =
+    useState<PasswordRequest | null>(null);
+  const [fullReadRequest, setFullReadRequest] =
+    useState<FullReadRequest | null>(null);
+  const [password, setPassword] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+  const passwordDialogRef = useRef<HTMLDivElement>(null);
+  const fullReadDialogRef = useRef<HTMLDivElement>(null);
+  const importRunning = useRef(false);
   const isDark = theme === 'dark';
+  const activeDocument = documents.find(
+    (document) => document.id === activeDocumentId,
+  );
+  const totalPages = documents.reduce(
+    (count, document) => count + document.pageCount,
+    0,
+  );
+
+  useEffect(() => {
+    if (passwordRequest) {
+      passwordInputRef.current?.focus();
+    }
+  }, [passwordRequest]);
+
+  useEffect(() => {
+    if (fullReadRequest) {
+      fullReadDialogRef.current
+        ?.querySelector<HTMLButtonElement>('button')
+        ?.focus();
+    }
+  }, [fullReadRequest]);
+
+  function requestDocumentPassword(
+    fileName: string,
+    reason: PasswordReason,
+  ): Promise<string | null> {
+    return new Promise((resolve) => {
+      setPasswordRequest({ fileName, reason, resolve });
+      setPassword('');
+    });
+  }
+
+  function requestFullReadConfirmation(
+    fileName: string,
+    fileSize: number,
+  ): Promise<boolean> {
+    return new Promise((resolve) => {
+      setFullReadRequest({ fileName, fileSize, resolve });
+    });
+  }
+
+  async function importFiles(files: File[]): Promise<void> {
+    if (files.length === 0 || importRunning.current) {
+      return;
+    }
+
+    importRunning.current = true;
+    setIsImporting(true);
+    setImportFailures([]);
+
+    const failures: ImportFailure[] = [];
+    for (const file of files) {
+      const fileName = safeFileName(file.name);
+      setProgress({
+        fileName,
+        loaded: 0,
+        total: file.size,
+        percent: 0,
+      });
+
+      try {
+        const { importPdfFile } = await import(
+          './features/documents/pdf-import'
+        );
+        const imported = await importPdfFile(file, {
+          requestPassword: (reason) =>
+            requestDocumentPassword(fileName, reason),
+          confirmFullRead: (fileSize) =>
+            requestFullReadConfirmation(fileName, fileSize),
+          onProgress: (nextProgress) => {
+            setProgress({ fileName, ...nextProgress });
+          },
+        });
+
+        setDocuments((currentDocuments) => [...currentDocuments, imported]);
+        setActiveDocumentId(imported.id);
+      } catch (error) {
+        failures.push({
+          fileName,
+          message: getImportFailureMessage(error),
+        });
+        setImportFailures([...failures]);
+      }
+    }
+
+    importRunning.current = false;
+    setIsImporting(false);
+    setProgress(null);
+  }
+
+  function handleFileInputChange(
+    event: FormEvent<HTMLInputElement>,
+  ): void {
+    const input = event.currentTarget;
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    void importFiles(files);
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>): void {
+    event.preventDefault();
+    if (!isImporting) {
+      void importFiles(Array.from(event.dataTransfer.files));
+    }
+  }
+
+  function handlePasswordSubmit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    const request = passwordRequest;
+    if (!request) {
+      return;
+    }
+
+    setPasswordRequest(null);
+    request.resolve(password);
+    setPassword('');
+  }
+
+  function cancelPasswordRequest(): void {
+    const request = passwordRequest;
+    if (!request) {
+      return;
+    }
+
+    setPasswordRequest(null);
+    request.resolve(null);
+    setPassword('');
+  }
+
+  function resolveFullReadRequest(confirmed: boolean): void {
+    const request = fullReadRequest;
+    if (!request) {
+      return;
+    }
+
+    setFullReadRequest(null);
+    request.resolve(confirmed);
+  }
+
+  function handlePasswordDialogKeyDown(
+    event: KeyboardEvent<HTMLDivElement>,
+  ): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelPasswordRequest();
+      return;
+    }
+
+    if (event.key !== 'Tab') {
+      return;
+    }
+
+    const dialog = passwordDialogRef.current;
+    if (!dialog) {
+      return;
+    }
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'input:not([disabled]), button:not([disabled])',
+      ),
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (
+      event.shiftKey &&
+      first &&
+      document.activeElement === first
+    ) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && last && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  }
+
+  function handleFullReadDialogKeyDown(
+    event: KeyboardEvent<HTMLDivElement>,
+  ): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      resolveFullReadRequest(false);
+      return;
+    }
+
+    if (event.key !== 'Tab') {
+      return;
+    }
+
+    const dialog = fullReadDialogRef.current;
+    if (!dialog) {
+      return;
+    }
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLButtonElement>('button:not([disabled])'),
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (
+      event.shiftKey &&
+      first &&
+      document.activeElement === first
+    ) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && last && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  }
+
+  const metadataRows = activeDocument
+    ? [
+        [es.properties.fileName, activeDocument.fileName],
+        [es.properties.fileSize, formatBytes(activeDocument.size)],
+        [es.properties.pageCount, formatNumber(activeDocument.pageCount)],
+        [es.properties.pdfVersion, activeDocument.metadata.pdfVersion],
+        [es.properties.title, activeDocument.metadata.title],
+        [es.properties.author, activeDocument.metadata.author],
+        [es.properties.subject, activeDocument.metadata.subject],
+        [es.properties.creator, activeDocument.metadata.creator],
+        [es.properties.producer, activeDocument.metadata.producer],
+        [es.properties.creationDate, activeDocument.metadata.creationDate],
+        [
+          es.properties.modificationDate,
+          activeDocument.metadata.modificationDate,
+        ],
+        [
+          es.properties.encrypted,
+          activeDocument.metadata.encrypted
+            ? es.properties.present
+            : es.properties.absent,
+        ],
+        [
+          es.properties.forms,
+          activeDocument.metadata.hasForms
+            ? es.properties.present
+            : es.properties.absent,
+        ],
+        [
+          es.properties.signatures,
+          activeDocument.metadata.hasSignatures
+            ? es.properties.present
+            : es.properties.absent,
+        ],
+      ] as const
+    : [];
 
   return (
     <div className="app-shell" data-theme={theme}>
@@ -55,18 +348,41 @@ function App() {
             <div className="panel-title-row">
               <h2 id="documents-heading">{es.documents.heading}</h2>
               <span className="count-badge" aria-hidden="true">
-                {formatNumber(0)}
+                {formatNumber(documents.length)}
               </span>
             </div>
             <p className="panel-caption">
-              {formatNumber(0)} {es.documents.countLabel}
+              {formatNumber(documents.length)} {es.documents.countLabel}
             </p>
-            <div className="document-empty">
-              <span className="empty-mark" aria-hidden="true">
-                —
-              </span>
-              <p>{es.documents.emptyState}</p>
-            </div>
+            {documents.length === 0 ? (
+              <div className="document-empty">
+                <span className="empty-mark" aria-hidden="true">
+                  —
+                </span>
+                <p>{es.documents.emptyState}</p>
+              </div>
+            ) : (
+              <ul className="document-list">
+                {documents.map((document) => (
+                  <li key={document.id}>
+                    <button
+                      className="document-list-item"
+                      type="button"
+                      aria-pressed={document.id === activeDocumentId}
+                      onClick={() => setActiveDocumentId(document.id)}
+                    >
+                      <span className="document-list-name">
+                        {document.fileName}
+                      </span>
+                      <span className="document-list-pages">
+                        {formatNumber(document.pageCount)}{' '}
+                        {es.documents.pageCountLabel}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="thumbnail-section" aria-labelledby="pages-heading">
@@ -82,6 +398,8 @@ function App() {
           className="workspace"
           aria-labelledby="workspace-heading"
           tabIndex={-1}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={handleDrop}
         >
           <div className="workspace-header">
             <div>
@@ -90,12 +408,16 @@ function App() {
             </div>
             <span className="document-state">
               <span className="state-dot" aria-hidden="true" />
-              {es.workspace.pending}
+              {activeDocument
+                ? es.workspace.activeDocument
+                : isImporting
+                  ? es.workspace.importing
+                  : es.workspace.pending}
             </span>
           </div>
 
           <section
-            className="canvas-stage"
+            className={`canvas-stage${isImporting ? ' is-importing' : ''}`}
             aria-label={es.workspace.landmark}
           >
             <div className="empty-document">
@@ -104,9 +426,66 @@ function App() {
                 <span />
                 <span />
               </div>
-              <h2>{es.workspace.emptyHeading}</h2>
-              <p>{es.workspace.emptyDescription}</p>
-              <p className="stage-note">{es.workspace.nextStage}</p>
+              {activeDocument ? (
+                <>
+                  <h2>{activeDocument.fileName}</h2>
+                  <p>
+                    {formatNumber(activeDocument.pageCount)}{' '}
+                    {es.documents.pageCountLabel}
+                  </p>
+                  <p className="stage-note">{es.workspace.activeDocument}</p>
+                </>
+              ) : (
+                <>
+                  <h2>{es.workspace.emptyHeading}</h2>
+                  <p>{es.workspace.emptyDescription}</p>
+                </>
+              )}
+              <div className="import-controls">
+                <input
+                  ref={fileInputRef}
+                  className="visually-hidden"
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  multiple
+                  aria-label={es.documents.importButton}
+                  disabled={isImporting}
+                  onChange={handleFileInputChange}
+                />
+                <button
+                  className="import-button"
+                  type="button"
+                  disabled={isImporting}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {es.documents.importButton}
+                </button>
+                <p className="import-hint">{es.documents.importDescription}</p>
+              </div>
+              <p className="stage-note">{es.documents.sourceNote}</p>
+
+              {isImporting && progress && (
+                <div className="import-progress" aria-live="polite">
+                  <p>
+                    {es.workspace.loading}: {progress.fileName}
+                  </p>
+                  <progress
+                    aria-label={es.workspace.importProgress}
+                    max={100}
+                    value={progress.percent}
+                  />
+                </div>
+              )}
+
+              {importFailures.length > 0 && (
+                <ul className="import-errors" role="alert">
+                  {importFailures.map((failure, index) => (
+                    <li key={`${failure.fileName}-${index}`}>
+                      <strong>{failure.fileName}:</strong> {failure.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </section>
         </main>
@@ -116,32 +495,165 @@ function App() {
             <p className="eyebrow">{es.app.localSession}</p>
             <h2 id="properties-heading">{es.properties.heading}</h2>
           </div>
-          <div className="properties-empty">
-            <span className="selection-mark" aria-hidden="true">
-              ◇
-            </span>
-            <h3>{es.properties.emptyState}</h3>
-            <p>{es.properties.description}</p>
-          </div>
+          {activeDocument ? (
+            <div className="document-properties">
+              <h3>{es.properties.documentHeading}</h3>
+              <dl>
+                {metadataRows.map(([label, value]) => (
+                  <div className="metadata-row" key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value ?? '—'}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ) : (
+            <div className="properties-empty">
+              <span className="selection-mark" aria-hidden="true">
+                ◇
+              </span>
+              <h3>{es.properties.emptyState}</h3>
+              <p>{es.properties.description}</p>
+            </div>
+          )}
         </aside>
       </div>
 
-      <footer className="statusbar" role="status" aria-live="polite">
+      <footer
+        className="statusbar"
+        role="status"
+        aria-live="polite"
+        title={es.status.sessionOnly}
+      >
         <span className="status-ready">
           <span className="status-dot" aria-hidden="true" />
-          {es.status.ready}
+          {isImporting ? es.status.loading : es.status.ready}
         </span>
         <span className="status-item">
-          {formatNumber(0)} {es.documents.countLabel}
+          {formatNumber(documents.length)} {es.documents.countLabel}
         </span>
         <span className="status-item">
-          {formatNumber(0)} {es.documents.pageCountLabel}
+          {formatNumber(totalPages)} {es.documents.pageCountLabel}
         </span>
         <span className="status-spacer" />
         <span className="status-item status-local">{es.status.localOnly}</span>
       </footer>
+
+      {passwordRequest && (
+        <div className="modal-backdrop">
+          <div
+            ref={passwordDialogRef}
+            className="password-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="password-title"
+            onKeyDown={handlePasswordDialogKeyDown}
+          >
+            <h2 id="password-title">{es.password.title}</h2>
+            <p>
+              {es.password.description.replace(
+                '{fileName}',
+                passwordRequest.fileName,
+              )}
+            </p>
+            {passwordRequest.reason === 'incorrect' && (
+              <p className="password-error" role="alert">
+                {es.password.incorrect}
+              </p>
+            )}
+            <form onSubmit={handlePasswordSubmit}>
+              <label htmlFor="pdf-password">{es.password.label}</label>
+              <input
+                ref={passwordInputRef}
+                id="pdf-password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.currentTarget.value)}
+              />
+              <div className="password-actions">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={cancelPasswordRequest}
+                >
+                  {es.password.cancel}
+                </button>
+                <button className="import-button" type="submit">
+                  {es.password.submit}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {fullReadRequest && (
+        <div className="modal-backdrop">
+          <div
+            ref={fullReadDialogRef}
+            className="password-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="full-read-title"
+            onKeyDown={handleFullReadDialogKeyDown}
+          >
+            <h2 id="full-read-title">{es.fullRead.title}</h2>
+            <p>
+              {es.fullRead.description
+                .replace('{fileName}', fullReadRequest.fileName)
+                .replace('{fileSize}', formatBytes(fullReadRequest.fileSize))}
+            </p>
+            <div className="password-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => resolveFullReadRequest(false)}
+              >
+                {es.fullRead.cancel}
+              </button>
+              <button
+                className="import-button"
+                type="button"
+                onClick={() => resolveFullReadRequest(true)}
+              >
+                {es.fullRead.continue}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function safeFileName(fileName: string): string {
+  return sanitizeText(fileName, 255) ?? 'documento.pdf';
+}
+
+function getImportFailureMessage(error: unknown): string {
+  if (!(error instanceof PdfImportError)) {
+    return es.documents.errors.readFailed;
+  }
+
+  switch (error.code) {
+    case 'empty-file':
+      return es.documents.errors.emptyFile;
+    case 'not-pdf':
+      return es.documents.errors.notPdf;
+    case 'invalid-pdf':
+      return es.documents.errors.invalidPdf;
+    case 'password-required':
+      return es.documents.errors.passwordRequired;
+    case 'password-incorrect':
+      return es.documents.errors.passwordIncorrect;
+    case 'password-cancelled':
+      return es.documents.errors.passwordCancelled;
+    case 'full-read-cancelled':
+      return es.documents.errors.fullReadCancelled;
+    case 'read-failed':
+      return es.documents.errors.readFailed;
+  }
 }
 
 export default App;

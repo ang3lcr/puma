@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios de rendimiento aprobados en Etapa 0; medición en el hardware Chrome/Edge de referencia aún pendiente. Validaciones de Etapa 1 ejecutadas.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1 y 2 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
 
 ## Entorno de referencia
 
@@ -48,3 +48,19 @@ Los spikes de Etapa 0 están detallados en [el informe](./docs/stage0-spike-repo
 También se inspeccionó la vista con el Chromium integrado de VS Code/Electron: anchos de 1440 px y 390 px, sin desbordamiento horizontal; el panel de propiedades se mantiene visible en móvil. Estos navegadores Chromium no sustituyen el smoke test pendiente en instalaciones nativas de Chrome y Edge estables sobre el hardware de referencia.
 
 El servidor dev también se probó en Chromium integrado 150.0.7871.250/Electron 43.8.6: respuesta 200, CSS aplicado y ningún error de consola o de página. Su CSP relaja scripts/estilos inline y Workers `blob:` únicamente para React Fast Refresh/HMR; la prueba E2E confirma que la política de preview no tiene esas excepciones.
+
+## Validación de Etapa 2
+
+Ejecución en Windows 11 con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 1.65.1 y Chromium 159.0.8154.6:
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm run test` | 2 archivos, 8 pruebas aprobadas; incluye rangos válidos/incorrectos, aborto, confirmación de lectura extensa y controles UI |
+| `npm run build` | Correcto; Vite 8.3.8. Shell inicial JS 236.16 kB / 73.55 kB gzip; módulo PDF.js diferido 447.26 kB / 134.89 kB gzip; Worker local 1,271.91 kB |
+| `npm run test:e2e` | 3 E2E aprobadas: CSP y shell, importación local/metadatos/error de PDF inválido, contraseña incorrecta/correcta y cancelación de PDF cifrado |
+
+La suite comprueba que no hay solicitudes HTTP(S) a otros orígenes durante la shell y la importación normal. También verifica el layout con un viewport de 390 px, sin desbordamiento horizontal y con los metadatos visibles. El módulo PDF.js se divide en un chunk que solo se solicita tras iniciar una importación; Worker y chunk se sirven desde el mismo origen.
+
+La confirmación de lectura extensa se activa para fuentes de al menos 400 MiB cuando la unión de rangos solicitados alcanza el 95 % del archivo. Se prueba la confirmación/rechazo con blobs pequeños usando un umbral de prueba; las mediciones de memoria y tiempo con PDFs grandes, Chrome/Edge nativos y hardware de 4 núcleos/8 GiB siguen pendientes.

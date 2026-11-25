@@ -46,7 +46,7 @@ En ambos casos, RSS aumentó aproximadamente el tamaño de la salida al guardar.
 - PDF vacío sintético de 1,000 páginas: **12,714 B**; conteo correcto; primera miniatura a 0.25×: **23.4 ms**, 153×198 px.
 - En Node, lectura completa del archivo de 500 MiB: **225 ms**; `getDocument` terminó en **100 ms**; RSS alcanzó **565.5 MiB** con un único `Uint8Array` compartiendo el buffer leído. No se duplicó el buffer intencionalmente.
 
-**Decisión:** lectura local por rangos respaldada por `Blob.slice()`, `isEvalSupported: false`, `page.cleanup()` y destrucción del loading task. Un PDF arbitrario puede exigir más rangos o la lectura completa; el fixture no modela índices complejos ni escaneos.
+**Decisión del spike:** lectura local por rangos respaldada por `Blob.slice()`, `isEvalSupported: false`, `page.cleanup()` y destrucción del loading task. Al integrar PDF.js 6.5.438 en Etapa 2 se comprobó que esa versión ya no expone `isEvalSupported`; el bundle fijado no contiene llamadas a `eval()` o `new Function()`, y la aplicación no inicializa el Viewer ni el gestor de scripting. Un PDF arbitrario puede exigir más rangos o la lectura completa; el fixture no modela índices complejos ni escaneos.
 
 ## 5. Spike OpenCV.js vs operaciones simples
 
@@ -91,7 +91,7 @@ Los assets revisados incluyen un bundle `tesseract.js` de 1.41 MB, worker de 111
 
 ## 8. Licencias y decisiones
 
-Las versiones/licencias consultadas están en [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES). PDF.js es Apache-2.0; pdf-lib MIT; OpenCV.js y Tesseract.js/core Apache-2.0; datos OSD MIT. Transitivas relevantes incluyen pako (MIT AND Zlib), `@pdf-lib/standard-fonts` y `@pdf-lib/upng` (MIT), idb-keyval (Apache-2.0) y wasm-feature-detect (Apache-2.0). La lista queda pendiente de lockfile definitivo. MuPDF no se selecciona por AGPL.
+Las versiones/licencias consultadas están en [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES). PDF.js es Apache-2.0; pdf-lib MIT; OpenCV.js y Tesseract.js/core Apache-2.0; datos OSD MIT. PDF.js 6.5.438 se integró con el lockfile en Etapa 2; pdf-lib, OpenCV y OCR siguen como candidatos/spikes. Transitivas relevantes incluyen pako (MIT AND Zlib), `@pdf-lib/standard-fonts` y `@pdf-lib/upng` (MIT), idb-keyval (Apache-2.0) y wasm-feature-detect (Apache-2.0). MuPDF no se selecciona por AGPL.
 
 ADRs propuestos:
 
@@ -106,7 +106,7 @@ ADRs propuestos:
 - Ejecutar los mismos tests en Chrome y Edge estables y en el hardware aprobado de 4 núcleos/8 GB o en el hardware de referencia que indique el usuario.
 - Probar PDFs reales/sintéticos con imágenes grandes, texto seleccionable, mezcla de ambos, páginas rotadas, cifrado, formularios, anotaciones, firmas y xref no trivial.
 - Construir y etiquetar fixtures para medir falsos positivos de páginas en blanco y precisión/cobertura de orientación.
-- Validar las dependencias propuestas en un proyecto inicial real y generar avisos desde lockfile.
+- Medir el flujo integrado con PDFs grandes en Chrome/Edge nativos de aceptación.
 - Confirmar qué sucede con PDFs que restringen copia/modificación y aprobar el presupuesto/método de exportación por partes.
 
 No se ejecutaron scripts de lint, typecheck, unit, build ni E2E durante Etapa 0: no existía proyecto inicial y esa etapa no debía implementarlo. El diseño y los criterios fueron aprobados; el reporte se conserva como evidencia de los spikes.

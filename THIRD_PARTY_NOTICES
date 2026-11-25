@@ -1,15 +1,16 @@
 Document Studio — avisos de terceros
 Fecha de revisión: 2026-11-25
 
-Las dependencias activas de Etapa 1 se fijan en package-lock.json. Los archivos
+Las dependencias activas de Etapas 1 y 2 se fijan en package-lock.json. Los archivos
 de licencia/NOTICE de cada paquete deben conservarse al distribuir. La lista
 incluye también transitivas relevantes revisadas; no es una auditoría legal.
 
-Dependencias directas de Etapa 1:
+Dependencias directas de la aplicación:
 
 Nombre                         Versión       Licencia
 React                          19.3.1        MIT
 React DOM                      19.3.1        MIT
+PDF.js (pdfjs-dist)            6.5.438       Apache-2.0
 TypeScript                     6.0.3         Apache-2.0
 Vite                           8.3.8         MIT
 @vitejs/plugin-react           6.3.0         MIT
@@ -31,7 +32,6 @@ eslint-plugin-react-refresh    0.5.8         MIT
 
 Paquetes usados solo en spikes de Etapa 0, no instalados en la app:
 
-PDF.js (pdfjs-dist)            6.5.438       Apache-2.0 (Etapa 0 spike)
 pdf-lib                        1.17.1        MIT (Etapa 0 spike)
 
 Candidatos futuros/opcionales, no instalados como dependencias:
@@ -67,7 +67,7 @@ Notas:
 - No se selecciona MuPDF porque su licencia AGPL puede imponer obligaciones
   incompatibles con la distribución prevista. No se seleccionó todavía una
   alternativa PDF/WASM diferente.
-- La lista de PDF/OCR corresponde a los paquetes inspeccionados y medidos en
-  Etapa 0; todavía no son dependencias productivas del proyecto.
+- PDF.js 6.5.438 pasó de dependencia de spike a dependencia directa de
+  producción en Etapa 2. Su licencia está en `node_modules/pdfjs-dist/LICENSE`.
 - La versión efectiva de cada paquete activo queda fijada por el lockfile.
-  Revisar licencias transitivas nuevamente cuando se agreguen dependencias PDF.
+  Revisar licencias transitivas nuevamente al agregar dependencias PDF/OCR.
