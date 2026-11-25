@@ -4,6 +4,8 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { es } from '../../i18n/es';
 import { formatNumber } from '../../i18n/format';
 import type { PageRenderQueue } from '../../pdf/page-render-queue';
+import { normalizePageRotation } from '../../pdf/page-rotation';
+import type { ProjectPage } from '../../store/project-store';
 import { ByteLruCache } from './thumbnail-cache';
 
 const rowHeight = 220;
@@ -13,9 +15,10 @@ const maxThumbnailHeight = 170;
 interface ThumbnailListProps {
   documentId: string;
   document: PDFDocumentProxy;
-  pageCount: number;
-  selectedPageNumber: number;
-  onSelectPage: (pageNumber: number) => void;
+  pages: readonly ProjectPage[];
+  selectedPageId: string | null;
+  onSelectPage: (pageId: string) => void;
+  onRestorePage: (pageId: string) => void;
   cache: ByteLruCache<string, ImageBitmap>;
   renderQueue: PageRenderQueue;
 }
@@ -23,30 +26,47 @@ interface ThumbnailListProps {
 export function ThumbnailList({
   documentId,
   document,
-  pageCount,
-  selectedPageNumber,
+  pages,
+  selectedPageId,
   onSelectPage,
+  onRestorePage,
   cache,
   renderQueue,
 }: ThumbnailListProps) {
   const scrollElementRef = useRef<HTMLDivElement>(null);
+  const activePageNumbers = new Map<string, number>();
+  pages.forEach((page) => {
+    if (!page.isDeleted) {
+      activePageNumbers.set(page.id, activePageNumbers.size + 1);
+    }
+  });
+  const selectedIndex = pages.findIndex(
+    (page) => page.id === selectedPageId && !page.isDeleted,
+  );
+  const getPageAt = (index: number): ProjectPage => {
+    const page = pages[index];
+    if (!page) {
+      throw new Error(`Thumbnail page at index ${index} is missing.`);
+    }
+    return page;
+  };
   // TanStack Virtual intentionally exposes mutable virtualizer state for the rendered window.
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
-    count: pageCount,
+    count: pages.length,
     getScrollElement: () => scrollElementRef.current,
     estimateSize: () => rowHeight,
-    getItemKey: (index) => `${documentId}:${index + 1}`,
+    getItemKey: (index) => getPageAt(index).id,
     overscan: 3,
   });
 
   useEffect(() => {
-    if (pageCount > 0) {
-      virtualizer.scrollToIndex(selectedPageNumber - 1, { align: 'auto' });
+    if (selectedIndex >= 0) {
+      virtualizer.scrollToIndex(selectedIndex, { align: 'auto' });
     }
-  }, [pageCount, selectedPageNumber, virtualizer]);
+  }, [pages.length, selectedIndex, virtualizer]);
 
-  if (pageCount === 0) {
+  if (pages.length === 0) {
     return <p className="thumbnail-empty">{es.documents.emptyPages}</p>;
   }
 
@@ -63,30 +83,76 @@ export function ThumbnailList({
         aria-label={es.documents.pagesHeading}
         style={{ height: `${virtualizer.getTotalSize()}px` }}
       >
-        {virtualizer.getVirtualItems().map((virtualItem) => (
-          <li
-            key={virtualItem.key}
-            className="thumbnail-virtual-row"
-            aria-posinset={virtualItem.index + 1}
-            aria-setsize={pageCount}
-            style={{
-              height: `${virtualItem.size}px`,
-              transform: `translateY(${virtualItem.start}px)`,
-            }}
-          >
-            <PageThumbnail
-              cache={cache}
-              document={document}
-              documentId={documentId}
-              pageNumber={virtualItem.index + 1}
-              selected={virtualItem.index + 1 === selectedPageNumber}
-              onSelect={onSelectPage}
-              renderQueue={renderQueue}
-            />
-          </li>
-        ))}
+        {virtualizer.getVirtualItems().map((virtualItem) => {
+          const page = getPageAt(virtualItem.index);
+          const displayPageNumber = activePageNumbers.get(page.id);
+          return (
+            <li
+              key={virtualItem.key}
+              className="thumbnail-virtual-row"
+              aria-posinset={virtualItem.index + 1}
+              aria-setsize={pages.length}
+              style={{
+                height: `${virtualItem.size}px`,
+                transform: `translateY(${virtualItem.start}px)`,
+              }}
+            >
+              {page.isDeleted ? (
+                <DeletedPageThumbnail
+                  page={page}
+                  projectPosition={virtualItem.index + 1}
+                  onRestore={onRestorePage}
+                />
+              ) : (
+                <PageThumbnail
+                  cache={cache}
+                  document={document}
+                  documentId={documentId}
+                  page={page}
+                  displayPageNumber={displayPageNumber ?? 0}
+                  selected={page.id === selectedPageId}
+                  onSelect={onSelectPage}
+                  renderQueue={renderQueue}
+                />
+              )}
+            </li>
+          );
+        })}
       </ol>
     </div>
+  );
+}
+
+interface DeletedPageThumbnailProps {
+  page: ProjectPage;
+  projectPosition: number;
+  onRestore: (pageId: string) => void;
+}
+
+function DeletedPageThumbnail({
+  page,
+  projectPosition,
+  onRestore,
+}: DeletedPageThumbnailProps) {
+  return (
+    <figure className="thumbnail-card thumbnail-card-deleted">
+      <div className="thumbnail-deleted-image" aria-hidden="true">
+        {es.pages.deleted}
+      </div>
+      <figcaption>
+        {es.pages.deletedPage} · {es.documents.pageLabel}{' '}
+        {formatNumber(page.sourcePageNumber)}
+        {page.duplicatedFromPageId && ` · ${es.pages.duplicateLabel}`}
+      </figcaption>
+      <button
+        className="thumbnail-restore"
+        type="button"
+        aria-label={`${es.pages.restore} ${formatNumber(projectPosition)}`}
+        onClick={() => onRestore(page.id)}
+      >
+        {es.pages.restore}
+      </button>
+    </figure>
   );
 }
 
@@ -94,9 +160,10 @@ interface PageThumbnailProps {
   cache: ByteLruCache<string, ImageBitmap>;
   document: PDFDocumentProxy;
   documentId: string;
-  pageNumber: number;
+  page: ProjectPage;
+  displayPageNumber: number;
   selected: boolean;
-  onSelect: (pageNumber: number) => void;
+  onSelect: (pageId: string) => void;
   renderQueue: PageRenderQueue;
 }
 
@@ -104,7 +171,8 @@ function PageThumbnail({
   cache,
   document,
   documentId,
-  pageNumber,
+  page,
+  displayPageNumber,
   selected,
   onSelect,
   renderQueue,
@@ -114,7 +182,7 @@ function PageThumbnail({
   const [renderStatus, setRenderStatus] = useState<
     'queued' | 'running' | 'completed' | 'cancelled' | 'failed'
   >('queued');
-  const cacheKey = `${documentId}:${pageNumber}`;
+  const cacheKey = `${documentId}:${page.sourcePageNumber}:${page.rotationDeltaDegrees}`;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -165,19 +233,22 @@ function PageThumbnail({
         if (signal.aborted) {
           return;
         }
-        const page = await document.getPage(pageNumber);
+        const sourcePage = await document.getPage(page.sourcePageNumber);
         try {
           if (signal.aborted) {
             return;
           }
 
-          const baseViewport = page.getViewport({ scale: 1 });
+          const rotation = normalizePageRotation(
+            sourcePage.rotate + page.rotationDeltaDegrees,
+          );
+          const baseViewport = sourcePage.getViewport({ scale: 1, rotation });
           const scale = Math.min(
             maxThumbnailWidth / baseViewport.width,
             maxThumbnailHeight / baseViewport.height,
             1,
           );
-          const viewport = page.getViewport({ scale });
+          const viewport = sourcePage.getViewport({ scale, rotation });
           targetCanvas.width = Math.max(1, Math.ceil(viewport.width));
           targetCanvas.height = Math.max(1, Math.ceil(viewport.height));
 
@@ -186,7 +257,7 @@ function PageThumbnail({
             throw new Error('Canvas 2D context is unavailable.');
           }
 
-          const renderTask = page.render({
+          const renderTask = sourcePage.render({
             canvas: targetCanvas,
             canvasContext: context,
             viewport,
@@ -212,7 +283,7 @@ function PageThumbnail({
           }
           cache.set(cacheKey, bitmap);
         } finally {
-          page.cleanup();
+          sourcePage.cleanup();
         }
       },
     });
@@ -227,21 +298,28 @@ function PageThumbnail({
       cancelled = true;
       renderHandle.cancel();
     };
-  }, [cache, cacheKey, document, pageNumber, renderQueue]);
+  }, [
+    cache,
+    cacheKey,
+    document,
+    page.rotationDeltaDegrees,
+    page.sourcePageNumber,
+    renderQueue,
+  ]);
 
   return (
     <figure className="thumbnail-card">
       <button
         className={`thumbnail-select${selected ? ' is-selected' : ''}`}
         type="button"
-        aria-label={`${es.viewer.selectPage} ${formatNumber(pageNumber)}`}
+        aria-label={`${es.viewer.selectPage} ${formatNumber(displayPageNumber)}`}
         aria-pressed={selected}
-        onClick={() => onSelect(pageNumber)}
+        onClick={() => onSelect(page.id)}
       >
         <span className="thumbnail-image">
           <canvas
             ref={canvasRef}
-            aria-label={`${es.documents.pageLabel} ${formatNumber(pageNumber)}`}
+            aria-label={`${es.documents.pageLabel} ${formatNumber(displayPageNumber)}`}
             className={error ? 'thumbnail-canvas has-error' : 'thumbnail-canvas'}
           />
           {error && (
@@ -260,7 +338,7 @@ function PageThumbnail({
         </span>
       </button>
       <figcaption>
-        {es.documents.pageLabel} {formatNumber(pageNumber)}
+        {es.documents.pageLabel} {formatNumber(displayPageNumber)}
       </figcaption>
     </figure>
   );

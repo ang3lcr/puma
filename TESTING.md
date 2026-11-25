@@ -120,3 +120,17 @@ Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 
 | `npm run test:e2e` | 4 E2E aprobadas; incluye importación deshecha/rehacida por botones y atajos de teclado, junto con CSP, PDF local y virtualización |
 
 El historial no clona bytes de `File`; los comandos retienen la misma referencia y deltas de IDs/metadatos. La prueba E2E verifica también deshacer/rehacer mientras se importan y reabren documentos. La persistencia del proyecto y la edición de páginas quedan fuera de esta etapa.
+
+## Validación de Etapa 7
+
+Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 1.65.1 y Chromium 159.0.8154.6:
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm run test` | 6 archivos, 21 pruebas aprobadas; incluye movimiento con páginas eliminadas, duplicación, rotación, eliminación/restauración, deltas e historial |
+| `npm run build` | Correcto; shell JS 298.61 kB / 91.57 kB gzip, CSS 16.16 kB / 3.84 kB gzip, módulo PDF.js diferido 447.46 kB / 134.94 kB gzip y Worker local 1,271.91 kB |
+| `npm run test:e2e` | 5 E2E aprobadas; incluye reordenar, duplicar, girar, eliminar/restaurar y undo/redo, además de CSP, importación local, virtualización y contraseña |
+
+El reordenamiento conserva el documento y número fuente; la rotación se refleja en miniaturas y visor, y la eliminación es lógica para permitir restauración y undo/redo. La validación no mide rendimiento/memoria en PDFs grandes ni en instalaciones nativas de Chrome/Edge; esos criterios continúan pendientes.

@@ -184,6 +184,48 @@ test('imports PDF metadata locally and reports invalid PDF files', async ({
   expect(pageErrors).toEqual([]);
 });
 
+test('reorders, duplicates, rotates, deletes, and restores project pages', async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.goto('/');
+  await page.getByLabel('Seleccionar PDF').setInputFiles({
+    name: 'page-operations.pdf',
+    mimeType: 'application/pdf',
+    buffer: createMinimalPdf(),
+  });
+  await expect(page.locator('.statusbar')).toContainText('1 páginas');
+
+  await page.getByRole('button', { name: 'Duplicar página' }).click();
+  await expect(page.locator('.statusbar')).toContainText('2 páginas');
+  await page
+    .getByRole('button', { name: 'Girar página 90° a la derecha' })
+    .click();
+  await expect(page.locator('.page-properties')).toContainText('90°');
+  await page.getByRole('button', { name: 'Mover página arriba' }).click();
+  await expect(
+    page.getByRole('spinbutton', { name: 'Número de página' }),
+  ).toHaveValue('1');
+
+  await page.getByRole('button', { name: 'Eliminar página' }).click();
+  await expect(page.locator('.statusbar')).toContainText('1 páginas');
+  await expect(page.locator('.thumbnail-card-deleted')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Restaurar 1' }).click();
+  await expect(page.locator('.statusbar')).toContainText('2 páginas');
+  await expect(page.locator('.page-properties')).toContainText('90°');
+
+  await page.getByRole('button', { name: 'Deshacer' }).click();
+  await expect(page.locator('.statusbar')).toContainText('1 páginas');
+  await expect(page.locator('.thumbnail-card-deleted')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Rehacer' }).click();
+  await expect(page.locator('.statusbar')).toContainText('2 páginas');
+  await expect(page.locator('.thumbnail-card-deleted')).toHaveCount(0);
+
+  expect(pageErrors).toEqual([]);
+});
+
 test('virtualizes long documents and renders thumbnails on demand', async ({
   page,
   baseURL,

@@ -458,6 +458,40 @@ main:focus-visible {
   line-height: 1.4;
 }
 
+.thumbnail-card-deleted {
+  justify-content: center;
+  gap: 8px;
+}
+
+.thumbnail-deleted-image {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  place-items: center;
+  border: 1px dashed var(--border);
+  border-radius: 5px;
+  color: var(--text-subtle);
+  background: var(--canvas);
+  font-size: 11px;
+}
+
+.thumbnail-restore {
+  min-height: 28px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  background: var(--panel);
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.thumbnail-restore:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .thumbnail-empty {
   display: grid;
   min-height: 90px;
@@ -558,6 +592,7 @@ main:focus-visible {
 
 .viewer-toolbar,
 .viewer-page-controls,
+.viewer-page-actions,
 .viewer-page-form,
 .viewer-zoom-controls {
   display: flex;
@@ -573,6 +608,7 @@ main:focus-visible {
 }
 
 .viewer-page-controls,
+.viewer-page-actions,
 .viewer-zoom-controls {
   gap: 5px;
 }

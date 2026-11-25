@@ -1,5 +1,14 @@
 # Changelog
 
+## Etapa 7 — 2026-11-25
+
+- Integradas operaciones reversibles para reordenar, duplicar, rotar 90° y eliminar/restaurar páginas en el documento de origen; los movimientos entre documentos quedan pospuestos a la Etapa 11.
+- La selección y navegación usan IDs estables y el orden del proyecto, conservando el número de página fuente para PDF.js. Visor y miniaturas aplican el delta de rotación; las páginas eliminadas siguen visibles con una acción accesible para restaurarlas.
+- Añadidas pruebas unitarias para orden e inversas con páginas eliminadas, duplicación/rotación/eliminación/restauración, historial y rechazo de movimientos entre documentos; E2E cubre el flujo de edición y undo/redo.
+- Validación: typecheck y lint correctos; 6 archivos de pruebas unitarias/componentes, 21 pruebas aprobadas; build correcto; 5 E2E aprobadas.
+- Bundle de producción: shell JS 298.61 kB / 91.57 kB gzip; CSS 16.16 kB / 3.84 kB gzip; módulo PDF.js diferido 447.46 kB / 134.94 kB gzip; Worker local 1,271.91 kB. Las métricas nativas de memoria/rendimiento de Chrome/Edge siguen pendientes.
+- Pendiente la aprobación de Etapa 7 antes de comenzar la Etapa 8.
+
 ## Etapa 6 — 2026-11-25
 
 - Añadido un modelo normalizado de proyecto con IDs estables para documentos y páginas, orden de documentos y orden global de páginas.
@@ -8,7 +17,7 @@
 - La selección temporal no crea comandos; una acción nueva después de undo descarta la rama de redo.
 - Validación: typecheck y lint correctos; 6 archivos de pruebas unitarias/componentes, 17 pruebas aprobadas; build correcto; 4 E2E aprobadas, incluidas undo/redo por controles y teclado, importación local, render PDF y ausencia de tráfico externo.
 - Bundle de producción: shell JS 291.57 kB / 89.61 kB gzip; CSS 15.61 kB / 3.78 kB gzip; módulo PDF.js diferido 447.46 kB / 134.94 kB gzip; Worker local 1,271.91 kB. Las métricas nativas de memoria/rendimiento de Chrome/Edge siguen pendientes.
-- Pendiente la aprobación de Etapa 6 antes de comenzar la Etapa 7.
+- Etapa 6 aprobada antes de comenzar la Etapa 7.
 
 ## Etapa 5 — 2026-11-25
 

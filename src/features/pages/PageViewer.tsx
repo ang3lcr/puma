@@ -7,6 +7,7 @@ import type {
   PageRenderQueue,
   RenderJobStatus,
 } from '../../pdf/page-render-queue';
+import { normalizePageRotation } from '../../pdf/page-rotation';
 
 const minimumZoom = 0.25;
 const maximumZoom = 3;
@@ -22,10 +23,19 @@ export interface PageInfo {
 
 interface PageViewerProps {
   document: PDFDocumentProxy;
+  pageId: string;
+  sourcePageNumber: number;
+  rotationDeltaDegrees: number;
   pageNumber: number;
   pageCount: number;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   onPageChange: (pageNumber: number) => void;
-  onPageInfo: (pageNumber: number, info: PageInfo) => void;
+  onMovePage: (direction: 'up' | 'down') => void;
+  onDuplicatePage: () => void;
+  onRotatePage: () => void;
+  onDeletePage: () => void;
+  onPageInfo: (pageId: string, info: PageInfo) => void;
   onImport: () => void;
   importDisabled: boolean;
   renderQueue: PageRenderQueue;
@@ -43,9 +53,18 @@ interface PageDimensions {
 
 export function PageViewer({
   document,
+  pageId,
+  sourcePageNumber,
+  rotationDeltaDegrees,
   pageNumber,
   pageCount,
+  canMoveUp,
+  canMoveDown,
   onPageChange,
+  onMovePage,
+  onDuplicatePage,
+  onRotatePage,
+  onDeletePage,
   onPageInfo,
   onImport,
   importDisabled,
@@ -60,14 +79,16 @@ export function PageViewer({
     null,
   );
   const [zoom, setZoom] = useState<number | 'fit'>('fit');
-  const [renderErrorPage, setRenderErrorPage] = useState<number | null>(null);
+  const [renderErrorPageId, setRenderErrorPageId] = useState<string | null>(
+    null,
+  );
   const [renderJobState, setRenderJobState] = useState<{
-    pageNumber: number;
+    pageId: string;
     status: RenderJobStatus;
-  }>({ pageNumber, status: 'queued' });
-  const renderError = renderErrorPage === pageNumber;
+  }>({ pageId, status: 'queued' });
+  const renderError = renderErrorPageId === pageId;
   const renderStatus =
-    renderJobState.pageNumber === pageNumber
+    renderJobState.pageId === pageId
       ? renderJobState.status
       : 'queued';
 
@@ -116,10 +137,10 @@ export function PageViewer({
       priority: 'visible-page',
       onStatus: (status) => {
         if (!cancelled) {
-          setRenderJobState({ pageNumber, status });
+          setRenderJobState({ pageId, status });
           if (status === 'queued') {
-            setRenderErrorPage((currentPage) =>
-              currentPage === pageNumber ? null : currentPage,
+            setRenderErrorPageId((currentPageId) =>
+              currentPageId === pageId ? null : currentPageId,
             );
           }
         }
@@ -128,13 +149,16 @@ export function PageViewer({
         if (signal.aborted) {
           return;
         }
-        const page = await document.getPage(pageNumber);
+        const page = await document.getPage(sourcePageNumber);
         try {
           if (signal.aborted) {
             return;
           }
 
-          const baseViewport = page.getViewport({ scale: 1 });
+          const rotation = normalizePageRotation(
+            page.rotate + rotationDeltaDegrees,
+          );
+          const baseViewport = page.getViewport({ scale: 1, rotation });
           if (baseViewport.width <= 0 || baseViewport.height <= 0) {
             throw new Error('The PDF page has invalid dimensions.');
           }
@@ -146,10 +170,10 @@ export function PageViewer({
             width: baseViewport.width,
             height: baseViewport.height,
           });
-          onPageInfo(pageNumber, {
+          onPageInfo(pageId, {
             widthMillimeters: (baseViewport.width * 25.4) / 72,
             heightMillimeters: (baseViewport.height * 25.4) / 72,
-            rotation: page.rotate,
+            rotation,
           });
 
           const deviceScale = Math.min(window.devicePixelRatio || 1, 2);
@@ -163,7 +187,7 @@ export function PageViewer({
             areaLimitedScale,
             dimensionLimitedScale,
           );
-          const viewport = page.getViewport({ scale: renderScale });
+          const viewport = page.getViewport({ scale: renderScale, rotation });
           targetCanvas.width = Math.max(1, Math.ceil(viewport.width));
           targetCanvas.height = Math.max(1, Math.ceil(viewport.height));
           targetCanvas.style.width = `${Math.ceil(baseViewport.width * effectiveZoom)}px`;
@@ -196,7 +220,7 @@ export function PageViewer({
     });
     void renderHandle.promise.catch(() => {
       if (!cancelled) {
-        setRenderErrorPage(pageNumber);
+        setRenderErrorPageId(pageId);
       }
     });
 
@@ -208,8 +232,10 @@ export function PageViewer({
     document,
     effectiveZoom,
     onPageInfo,
-    pageNumber,
+    pageId,
     renderQueue,
+    rotationDeltaDegrees,
+    sourcePageNumber,
     viewportSize.height,
     viewportSize.width,
   ]);
@@ -255,6 +281,60 @@ export function PageViewer({
             onClick={() => onPageChange(pageNumber + 1)}
           >
             ›
+          </button>
+        </div>
+
+        <div
+          className="viewer-page-actions"
+          role="group"
+          aria-label={es.pages.actionsHeading}
+        >
+          <button
+            className="viewer-control"
+            type="button"
+            aria-label={es.pages.moveUp}
+            title={es.pages.moveUp}
+            disabled={!canMoveUp}
+            onClick={() => onMovePage('up')}
+          >
+            ↑
+          </button>
+          <button
+            className="viewer-control"
+            type="button"
+            aria-label={es.pages.moveDown}
+            title={es.pages.moveDown}
+            disabled={!canMoveDown}
+            onClick={() => onMovePage('down')}
+          >
+            ↓
+          </button>
+          <button
+            className="viewer-control"
+            type="button"
+            aria-label={es.pages.duplicate}
+            title={es.pages.duplicate}
+            onClick={onDuplicatePage}
+          >
+            +
+          </button>
+          <button
+            className="viewer-control"
+            type="button"
+            aria-label={es.pages.rotate}
+            title={es.pages.rotate}
+            onClick={onRotatePage}
+          >
+            ↻
+          </button>
+          <button
+            className="viewer-control"
+            type="button"
+            aria-label={es.pages.delete}
+            title={es.pages.delete}
+            onClick={onDeletePage}
+          >
+            ×
           </button>
         </div>
 

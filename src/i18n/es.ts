@@ -18,6 +18,21 @@ export const es = {
     undo: 'Deshacer',
     redo: 'Rehacer',
   },
+  pages: {
+    actionsHeading: 'Acciones de página',
+    moveUp: 'Mover página arriba',
+    moveDown: 'Mover página abajo',
+    duplicate: 'Duplicar página',
+    rotate: 'Girar página 90° a la derecha',
+    delete: 'Eliminar página',
+    restore: 'Restaurar',
+    deleted: 'Eliminada',
+    deletedPage: 'Página eliminada',
+    duplicateLabel: 'Duplicada',
+    noActivePages: 'No hay páginas activas',
+    restoreHint:
+      'Restaura una página eliminada desde la lista de miniaturas.',
+  },
   documents: {
     heading: 'Documentos',
     countLabel: 'documentos',

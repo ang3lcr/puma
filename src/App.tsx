@@ -17,8 +17,14 @@ import { es } from './i18n/es';
 import { formatBytes, formatNumber } from './i18n/format';
 import { PageRenderQueue } from './pdf/page-render-queue';
 import {
+  createDeletePageCommand,
+  createDuplicatePageCommand,
+  createMovePageCommand,
   createProjectHistoryState,
+  createRestorePageCommand,
+  createRotatePageCommand,
   getOrderedProjectDocuments,
+  getOrderedProjectPages,
   projectHistoryReducer,
   type ProjectDocument,
 } from './store/project-store';
@@ -59,10 +65,11 @@ function App() {
     createProjectHistoryState,
   );
   const documents = getOrderedProjectDocuments(projectHistory.project);
+  const projectPages = getOrderedProjectPages(projectHistory.project);
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
-  const [activePageNumber, setActivePageNumber] = useState(1);
+  const [activePageId, setActivePageId] = useState<string | null>(null);
   const [activePageInfo, setActivePageInfo] = useState<
-    (PageInfo & { documentId: string; pageNumber: number }) | null
+    (PageInfo & { pageId: string }) | null
   >(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isOpeningDocument, setIsOpeningDocument] = useState(false);
@@ -95,30 +102,33 @@ function App() {
   const activeDocument = documents.find(
     (document) => document.id === activeDocumentId,
   );
+  const documentPages = projectPages.filter(
+    (page) => page.documentId === activeDocumentId,
+  );
+  const activeDocumentPages = documentPages.filter((page) => !page.isDeleted);
+  const selectedPageId = activeDocumentPages.some(
+    (page) => page.id === activePageId,
+  )
+    ? activePageId
+    : (activeDocumentPages[0]?.id ?? null);
+  const activePageIndex = activeDocumentPages.findIndex(
+    (page) => page.id === selectedPageId,
+  );
+  const activePageNumber = activePageIndex + 1;
+  const currentProjectPage =
+    activePageIndex >= 0 ? activeDocumentPages[activePageIndex] : null;
   const activeSession =
     activePdfSession?.documentId === activeDocumentId
       ? activePdfSession.session
       : null;
   const currentPageInfo =
-    activePageInfo?.documentId === activeDocumentId &&
-    activePageInfo.pageNumber === activePageNumber
-      ? activePageInfo
-      : null;
-  const totalPages = documents.reduce(
-    (count, document) => count + document.pageCount,
-    0,
-  );
+    activePageInfo?.pageId === currentProjectPage?.id ? activePageInfo : null;
+  const totalPages = projectPages.filter((page) => !page.isDeleted).length;
   const updatePageInfo = useCallback(
-    (pageNumber: number, info: PageInfo): void => {
-      if (activeDocumentId) {
-        setActivePageInfo({
-          ...info,
-          documentId: activeDocumentId,
-          pageNumber,
-        });
-      }
+    (pageId: string, info: PageInfo): void => {
+      setActivePageInfo({ ...info, pageId });
     },
-    [activeDocumentId],
+    [],
   );
 
   const undoProjectChange = useCallback((): void => {
@@ -136,7 +146,7 @@ function App() {
       );
     if (removesActiveDocument) {
       setActiveDocumentId(null);
-      setActivePageNumber(1);
+      setActivePageId(null);
       setActivePageInfo(null);
       setActivePdfSession(null);
     }
@@ -146,6 +156,75 @@ function App() {
   const redoProjectChange = useCallback((): void => {
     dispatchProject({ type: 'redo' });
   }, [dispatchProject]);
+
+  function moveSelectedPage(direction: 'up' | 'down'): void {
+    if (!currentProjectPage) {
+      return;
+    }
+    dispatchProject({
+      type: 'execute',
+      command: createMovePageCommand(
+        projectHistory.project,
+        currentProjectPage.id,
+        activePageNumber + (direction === 'up' ? -1 : 1),
+      ),
+    });
+  }
+
+  function duplicateSelectedPage(): void {
+    if (!currentProjectPage) {
+      return;
+    }
+    const command = createDuplicatePageCommand(
+      projectHistory.project,
+      currentProjectPage.id,
+    );
+    const operation = command.forward[0];
+    if (!operation || operation.type !== 'insert-page') {
+      throw new Error('The duplicate page command did not insert a page.');
+    }
+    dispatchProject({ type: 'execute', command });
+    setActivePageId(operation.page.id);
+  }
+
+  function rotateSelectedPage(): void {
+    if (!currentProjectPage) {
+      return;
+    }
+    dispatchProject({
+      type: 'execute',
+      command: createRotatePageCommand(
+        projectHistory.project,
+        currentProjectPage.id,
+      ),
+    });
+  }
+
+  function deleteSelectedPage(): void {
+    if (!currentProjectPage) {
+      return;
+    }
+    const nextPage =
+      activeDocumentPages[activePageIndex + 1] ??
+      activeDocumentPages[activePageIndex - 1] ??
+      null;
+    dispatchProject({
+      type: 'execute',
+      command: createDeletePageCommand(
+        projectHistory.project,
+        currentProjectPage.id,
+      ),
+    });
+    setActivePageId(nextPage?.id ?? null);
+  }
+
+  function restorePage(pageId: string): void {
+    dispatchProject({
+      type: 'execute',
+      command: createRestorePageCommand(projectHistory.project, pageId),
+    });
+    setActivePageId(pageId);
+  }
 
   useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent): void => {
@@ -283,7 +362,12 @@ function App() {
         const { session, ...documentRecord } = imported;
         dispatchProject({ type: 'import-document', document: documentRecord });
         setActiveDocumentId(documentRecord.id);
-        setActivePageNumber(1);
+        setActivePageId(
+          documentRecord.pageCount > 0
+            ? `${documentRecord.id}:page:1`
+            : null,
+        );
+        setActivePageInfo(null);
         setActivePdfSession({ documentId: documentRecord.id, session });
       } catch (error) {
         failures.push({
@@ -332,7 +416,11 @@ function App() {
       });
 
       setActiveDocumentId(document.id);
-      setActivePageNumber(1);
+      const firstPage = getOrderedProjectPages(projectHistory.project).find(
+        (page) => page.documentId === document.id && !page.isDeleted,
+      );
+      setActivePageId(firstPage?.id ?? null);
+      setActivePageInfo(null);
       setActivePdfSession({ documentId: document.id, session });
     } catch (error) {
       setImportFailures([
@@ -628,9 +716,10 @@ function App() {
                 cache={thumbnailCache}
                 document={activeSession.document}
                 documentId={activeDocument.id}
-                pageCount={activeDocument.pageCount}
-                selectedPageNumber={activePageNumber}
-                onSelectPage={setActivePageNumber}
+                pages={documentPages}
+                selectedPageId={selectedPageId}
+                onSelectPage={setActivePageId}
+                onRestorePage={restorePage}
                 renderQueue={renderQueue}
               />
             ) : (
@@ -703,13 +792,24 @@ function App() {
             className={`canvas-stage${isLoadingDocument ? ' is-importing' : ''}`}
             aria-label={es.workspace.landmark}
           >
-            {activeDocument && activeSession ? (
+            {activeDocument && activeSession && currentProjectPage ? (
               <PageViewer
                 key={activeDocument.id}
                 document={activeSession.document}
+                pageId={currentProjectPage.id}
+                sourcePageNumber={currentProjectPage.sourcePageNumber}
+                rotationDeltaDegrees={currentProjectPage.rotationDeltaDegrees}
                 pageNumber={activePageNumber}
-                pageCount={activeDocument.pageCount}
-                onPageChange={setActivePageNumber}
+                pageCount={activeDocumentPages.length}
+                canMoveUp={activePageNumber > 1}
+                canMoveDown={activePageNumber < activeDocumentPages.length}
+                onPageChange={(pageNumber) =>
+                  setActivePageId(activeDocumentPages[pageNumber - 1]?.id ?? null)
+                }
+                onMovePage={moveSelectedPage}
+                onDuplicatePage={duplicateSelectedPage}
+                onRotatePage={rotateSelectedPage}
+                onDeletePage={deleteSelectedPage}
                 onPageInfo={updatePageInfo}
                 onImport={() => fileInputRef.current?.click()}
                 importDisabled={isLoadingDocument}
@@ -723,12 +823,16 @@ function App() {
                   <span />
                 </div>
                 <h2>
-                  {activeDocument
+                  {activeDocument && activeSession
+                    ? es.pages.noActivePages
+                    : activeDocument
                     ? activeDocument.fileName
                     : es.workspace.emptyHeading}
                 </h2>
                 <p>
-                  {activeDocument
+                  {activeDocument && activeSession
+                    ? es.pages.restoreHint
+                    : activeDocument
                     ? es.documents.reopening
                     : es.workspace.emptyDescription}
                 </p>
@@ -776,8 +880,8 @@ function App() {
                     <div className="metadata-row">
                       <dt>{es.properties.currentPage}</dt>
                       <dd>
-                        {formatNumber(currentPageInfo.pageNumber)} /{' '}
-                        {formatNumber(activeDocument.pageCount)}
+                        {formatNumber(activePageNumber)} /{' '}
+                        {formatNumber(activeDocumentPages.length)}
                       </dd>
                     </div>
                     <div className="metadata-row">
