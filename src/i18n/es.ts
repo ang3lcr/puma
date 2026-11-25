@@ -60,6 +60,9 @@ export const es = {
     keyboardHelp:
       'Con el visor enfocado, usa las flechas izquierda y derecha para cambiar de página.',
     renderError: 'No se pudo mostrar esta página del PDF.',
+    renderQueued: 'Renderizado en cola…',
+    rendering: 'Generando página…',
+    renderProgress: 'Progreso de renderizado',
   },
   password: {
     title: 'PDF protegido',

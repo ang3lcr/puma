@@ -413,6 +413,16 @@ main:focus-visible {
   text-align: center;
 }
 
+.thumbnail-progress {
+  position: absolute;
+  padding: 6px 8px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  background: var(--panel-raised);
+  font-size: 10px;
+  text-align: center;
+}
+
 .thumbnail-card figcaption {
   min-height: 16px;
   color: var(--text-muted);
@@ -609,6 +619,7 @@ main:focus-visible {
 }
 
 .viewer-canvas-scroll {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -621,6 +632,34 @@ main:focus-visible {
   background-color: var(--canvas);
   background-image: radial-gradient(var(--border-soft) 0.7px, transparent 0.7px);
   background-size: 17px 17px;
+}
+
+.viewer-canvas-scroll[aria-busy="true"] {
+  cursor: progress;
+}
+
+.viewer-render-status {
+  position: absolute;
+  z-index: 1;
+  top: 10px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 20px);
+  padding: 7px 10px;
+  transform: translateX(-50%);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  background: var(--panel-raised);
+  box-shadow: var(--shadow);
+  font-size: 11px;
+}
+
+.viewer-render-status progress {
+  width: 70px;
+  height: 8px;
 }
 
 .viewer-canvas-content {
@@ -637,19 +676,6 @@ main:focus-visible {
   display: block;
   background: #fff;
   box-shadow: var(--shadow);
-}
-
-.viewer-render-error {
-  position: absolute;
-  inset: 24px;
-  display: grid;
-  margin: 0;
-  padding: 16px;
-  place-items: center;
-  color: var(--text);
-  background: rgb(12 18 25 / 86%);
-  font-size: 12px;
-  text-align: center;
 }
 
 .document-glyph {

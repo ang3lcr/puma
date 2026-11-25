@@ -1,13 +1,13 @@
 # Arquitectura propuesta
 
-**Estado:** arquitectura base aprobada en Etapa 0; shell aprobada en Etapa 1; importación local, miniaturas virtualizadas y visor implementados en Etapas 2–4. Edición, persistencia de proyecto y exportación siguen pendientes de sus etapas.
+**Estado:** arquitectura base aprobada en Etapa 0; etapas 1–5 implementadas y aprobadas o en revisión. Edición, persistencia de proyecto y exportación siguen pendientes de sus etapas.
 
 ## Alcance técnico
 
 - Aplicación cliente con React, TypeScript estricto y Vite; sin backend, API, telemetría ni recursos de terceros en tiempo de ejecución.
 - Navegadores de producto: Chrome y Edge de escritorio, últimas dos versiones estables. El navegador integrado medido en el spike es Electron/Chromium y no sustituye la validación en esos productos.
 - PDF.js 6.5.438 para lectura, metadatos y renderizado; pdf-lib solo para generar o modificar exportaciones cuyo presupuesto de memoria sea seguro.
-- Web Workers para lectura por rangos, miniaturas y análisis visual. La vista visible tiene prioridad sobre el análisis masivo.
+- El Worker local de PDF.js atiende la lectura PDF; `PageRenderQueue` serializa los trabajos que usan canvas, prioriza la página visible sobre las miniaturas en espera y propaga cancelación. Los Workers de análisis visual se incorporarán en las etapas correspondientes.
 - IndexedDB conserva el estado pequeño del proyecto y, cuando el navegador lo permita, handles de archivos. Los bytes originales no se guardan automáticamente en IndexedDB.
 
 ## Límites establecidos por los spikes
@@ -36,9 +36,9 @@ src/
     export/            estimación, generación y validación
     projects/          guardado, recuperación y migraciones
   i18n/                catálogo español; sin textos de UI incrustados
-  pdf/                 adaptadores PDF.js/pdf-lib y geometría PDF
+  pdf/                 adaptadores PDF.js/pdf-lib, cola de render y geometría
   storage/             IndexedDB, handles y referencias a archivos
-  workers/             renderizado y cola tipada de análisis
+  workers/             análisis visual futuro y mensajes tipados
   store/               estado normalizado y comandos con deltas
   types/               contratos del dominio y mensajes Worker
   utils/
@@ -49,7 +49,7 @@ docs/
   adr/
 ```
 
-La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniaturas bajo demanda al entrar en la ventana visible y se cancelan al salir. La selección de miniatura se mantiene sincronizada con el visor de una página, que permite zoom de 25–300 %, ajuste a página y navegación por controles, número o flechas cuando el visor tiene foco. Presenta dimensiones físicas y rotación PDF de solo lectura. El canvas principal está limitado a 16,777,216 píxeles y 8,192 px por lado para acotar memoria; la resolución puede reducirse al alcanzar esos límites. La caché LRU de miniaturas mantiene hasta 64 MiB de `ImageBitmap`, contabilizados a 4 bytes por píxel, y cierra los recursos al expulsarlos o desmontar la aplicación. Al desmontar una miniatura se cancela el renderizado y se llama `page.cleanup()`; al cambiar de documento se destruye el `PDFDocumentLoadingTask` anterior.
+La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniaturas bajo demanda al entrar en la ventana visible y se cancelan al salir. `PageRenderQueue` mantiene una sola tarea PDF de render activa, conserva FIFO dentro de cada prioridad y adelanta la página visible a las miniaturas que siguen en espera. Al cancelar un trabajo activo aborta su `RenderTask` de PDF.js y espera su finalización antes de usar otro canvas. La interfaz expone espera, renderizado con progreso indeterminado y errores; no inventa porcentajes de progreso. La selección de miniatura se mantiene sincronizada con el visor de una página, que permite zoom de 25–300 %, ajuste a página y navegación por controles, número o flechas cuando el visor tiene foco. Presenta dimensiones físicas y rotación PDF de solo lectura. El canvas principal está limitado a 16,777,216 píxeles y 8,192 px por lado para acotar memoria; la resolución puede reducirse al alcanzar esos límites. La caché LRU de miniaturas mantiene hasta 64 MiB de `ImageBitmap`, contabilizados a 4 bytes por píxel, y cierra los recursos al expulsarlos o desmontar la aplicación. Al desmontar una miniatura se cancela el renderizado y se llama `page.cleanup()`; al cambiar de documento se destruye el `PDFDocumentLoadingTask` anterior.
 
 ## Modelo de dominio
 
@@ -61,7 +61,7 @@ La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniat
 ## Flujo de datos
 
 1. Importar uno o varios archivos sin alterar el original. PDF.js lee rangos y obtiene metadatos; el conteo de páginas no requiere renderizar todas las páginas. Solo se conserva abierta la sesión PDF del documento activo; al cambiar de documento se libera y el seleccionado se reabre desde su `File`.
-2. Renderizar miniaturas únicamente para las páginas próximas al viewport y renderizar en el visor solo la página seleccionada. Texto digital se conserva como texto; imágenes y páginas mixtas no se rasterizan para analizarlas.
+2. Renderizar miniaturas únicamente para las páginas próximas al viewport y renderizar en el visor solo la página seleccionada. La cola serializa las tareas de canvas y prioriza la página seleccionada. Texto digital se conserva como texto; imágenes y páginas mixtas no se rasterizan para analizarlas.
 3. Procesar imágenes de resolución reducida en Worker con un límite de concurrencia, cancelación, prioridades y mensajes tipados. Transferir buffers cuando sea seguro para evitar copias.
 4. Registrar sugerencias de análisis sin modificar el contenido. Ante baja confianza, marcar «Requiere revisión».
 5. Aplicar acciones del usuario al modelo mediante comandos reversibles.
@@ -71,7 +71,7 @@ La lista larga se virtualiza con `@tanstack/react-virtual`; se renderizan miniat
 
 - CSP estricta servida también como cabecera HTTP: recursos solo del mismo origen, sin CDN, telemetría, `eval` o `object-src`; permitir únicamente los esquemas locales imprescindibles para PDF/Workers después de validarlos. La política de desarrollo permite scripts/estilos inline y Workers `blob:` solo para React Fast Refresh/HMR de Vite; preview y hosting de producción no permiten `unsafe-inline` ni `blob:` para Workers. Usar rutas locales de Worker.
 - La versión integrada de PDF.js no expone `isEvalSupported` en su API. Se usa sin el Viewer ni el gestor de scripting; la comprobación del bundle fijado no encontró llamadas a `eval()` ni `new Function()`. No se ejecutan acciones ni JavaScript del PDF.
-- La importación retiene el `File` durante la sesión, sin copiar el archivo a IndexedDB. La etapa activa conserva su `PDFDocumentLoadingTask` para miniaturas y lo destruye al cambiar de documento o desmontar la aplicación. Las miniaturas se limitan a una caché de 64 MiB y el renderizado se cancela al salir de la ventana virtual. La fuente se debe volver a seleccionar tras recargar; la persistencia de handles se implementará con el almacenamiento del proyecto.
+- La importación retiene el `File` durante la sesión, sin copiar el archivo a IndexedDB. La etapa activa conserva su `PDFDocumentLoadingTask` para miniaturas y lo destruye al cambiar de documento o desmontar la aplicación. Las miniaturas se limitan a una caché de 64 MiB y el renderizado se cancela al salir de la ventana virtual; `page.cleanup()` se ejecuta después de finalizar cada tarea. La fuente se debe volver a seleccionar tras recargar; la persistencia de handles se implementará con el almacenamiento del proyecto.
 - Escapar nombres, metadatos y mensajes procedentes de PDF. No insertar HTML proporcionado por documentos.
 - La File System Access API es específica de Chromium. Si no está disponible, pedir que se vuelva a seleccionar la fuente después de recargar. OPFS e IndexedDB están sujetos a cuota y evicción; consultar `navigator.storage.estimate()` y manejar errores explícitamente.
 - Las firmas digitales dejan de ser válidas tras modificar o combinar el PDF. Formularios, anotaciones, marcadores, capas, adjuntos, etiquetas y restricciones de permisos se evalúan y documentan antes de exportar; no prometer preservación no comprobada.

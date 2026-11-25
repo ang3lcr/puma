@@ -3,6 +3,10 @@ import type { FormEvent, KeyboardEvent } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { es } from '../../i18n/es';
 import { formatNumber } from '../../i18n/format';
+import type {
+  PageRenderQueue,
+  RenderJobStatus,
+} from '../../pdf/page-render-queue';
 
 const minimumZoom = 0.25;
 const maximumZoom = 3;
@@ -24,6 +28,7 @@ interface PageViewerProps {
   onPageInfo: (pageNumber: number, info: PageInfo) => void;
   onImport: () => void;
   importDisabled: boolean;
+  renderQueue: PageRenderQueue;
 }
 
 interface ViewportSize {
@@ -44,6 +49,7 @@ export function PageViewer({
   onPageInfo,
   onImport,
   importDisabled,
+  renderQueue,
 }: PageViewerProps) {
   const viewerRef = useRef<HTMLDivElement>(null);
   const [viewportSize, setViewportSize] = useState<ViewportSize>({
@@ -54,7 +60,16 @@ export function PageViewer({
     null,
   );
   const [zoom, setZoom] = useState<number | 'fit'>('fit');
-  const [renderError, setRenderError] = useState(false);
+  const [renderErrorPage, setRenderErrorPage] = useState<number | null>(null);
+  const [renderJobState, setRenderJobState] = useState<{
+    pageNumber: number;
+    status: RenderJobStatus;
+  }>({ pageNumber, status: 'queued' });
+  const renderError = renderErrorPage === pageNumber;
+  const renderStatus =
+    renderJobState.pageNumber === pageNumber
+      ? renderJobState.status
+      : 'queued';
 
   useEffect(() => {
     const element = viewerRef.current;
@@ -97,85 +112,104 @@ export function PageViewer({
     const targetCanvas = canvas;
 
     let cancelled = false;
-    let page: Awaited<ReturnType<PDFDocumentProxy['getPage']>> | null = null;
-    let renderTask: ReturnType<
-      Awaited<ReturnType<PDFDocumentProxy['getPage']>>['render']
-    > | null = null;
-    targetCanvas.width = 0;
-    targetCanvas.height = 0;
-    setRenderError(false);
-
-    async function renderPage(): Promise<void> {
-      try {
-        page = await document.getPage(pageNumber);
-        if (cancelled) {
+    const renderHandle = renderQueue.enqueue({
+      priority: 'visible-page',
+      onStatus: (status) => {
+        if (!cancelled) {
+          setRenderJobState({ pageNumber, status });
+          if (status === 'queued') {
+            setRenderErrorPage((currentPage) =>
+              currentPage === pageNumber ? null : currentPage,
+            );
+          }
+        }
+      },
+      run: async (signal) => {
+        if (signal.aborted) {
           return;
         }
+        const page = await document.getPage(pageNumber);
+        try {
+          if (signal.aborted) {
+            return;
+          }
 
-        const baseViewport = page.getViewport({ scale: 1 });
-        if (baseViewport.width <= 0 || baseViewport.height <= 0) {
-          throw new Error('The PDF page has invalid dimensions.');
-        }
-        const pageArea = baseViewport.width * baseViewport.height;
-        if (!Number.isFinite(pageArea) || pageArea <= 0) {
-          throw new Error('The PDF page area is invalid.');
-        }
-        setPageDimensions({
-          width: baseViewport.width,
-          height: baseViewport.height,
-        });
-        onPageInfo(pageNumber, {
-          widthMillimeters: (baseViewport.width * 25.4) / 72,
-          heightMillimeters: (baseViewport.height * 25.4) / 72,
-          rotation: page.rotate,
-        });
+          const baseViewport = page.getViewport({ scale: 1 });
+          if (baseViewport.width <= 0 || baseViewport.height <= 0) {
+            throw new Error('The PDF page has invalid dimensions.');
+          }
+          const pageArea = baseViewport.width * baseViewport.height;
+          if (!Number.isFinite(pageArea) || pageArea <= 0) {
+            throw new Error('The PDF page area is invalid.');
+          }
+          setPageDimensions({
+            width: baseViewport.width,
+            height: baseViewport.height,
+          });
+          onPageInfo(pageNumber, {
+            widthMillimeters: (baseViewport.width * 25.4) / 72,
+            heightMillimeters: (baseViewport.height * 25.4) / 72,
+            rotation: page.rotate,
+          });
 
-        const deviceScale = Math.min(window.devicePixelRatio || 1, 2);
-        const desiredScale = effectiveZoom * deviceScale;
-        const areaLimitedScale = Math.sqrt(maxCanvasPixels / pageArea);
-        const dimensionLimitedScale =
-          maxCanvasDimension / Math.max(baseViewport.width, baseViewport.height);
-        const renderScale = Math.min(
-          desiredScale,
-          areaLimitedScale,
-          dimensionLimitedScale,
-        );
-        const viewport = page.getViewport({ scale: renderScale });
-        targetCanvas.width = Math.max(1, Math.ceil(viewport.width));
-        targetCanvas.height = Math.max(1, Math.ceil(viewport.height));
-        targetCanvas.style.width = `${Math.ceil(baseViewport.width * effectiveZoom)}px`;
-        targetCanvas.style.height = `${Math.ceil(baseViewport.height * effectiveZoom)}px`;
+          const deviceScale = Math.min(window.devicePixelRatio || 1, 2);
+          const desiredScale = effectiveZoom * deviceScale;
+          const areaLimitedScale = Math.sqrt(maxCanvasPixels / pageArea);
+          const dimensionLimitedScale =
+            maxCanvasDimension /
+            Math.max(baseViewport.width, baseViewport.height);
+          const renderScale = Math.min(
+            desiredScale,
+            areaLimitedScale,
+            dimensionLimitedScale,
+          );
+          const viewport = page.getViewport({ scale: renderScale });
+          targetCanvas.width = Math.max(1, Math.ceil(viewport.width));
+          targetCanvas.height = Math.max(1, Math.ceil(viewport.height));
+          targetCanvas.style.width = `${Math.ceil(baseViewport.width * effectiveZoom)}px`;
+          targetCanvas.style.height = `${Math.ceil(baseViewport.height * effectiveZoom)}px`;
 
-        const context = targetCanvas.getContext('2d', { alpha: false });
-        if (!context) {
-          throw new Error('Canvas 2D context is unavailable.');
-        }
+          const context = targetCanvas.getContext('2d', { alpha: false });
+          if (!context) {
+            throw new Error('Canvas 2D context is unavailable.');
+          }
 
-        renderTask = page.render({
-          canvas: targetCanvas,
-          canvasContext: context,
-          viewport,
-        });
-        await renderTask.promise;
-      } catch {
-        if (!cancelled) {
-          setRenderError(true);
+          const renderTask = page.render({
+            canvas: targetCanvas,
+            canvasContext: context,
+            viewport,
+          });
+          const cancelRender = (): void => renderTask.cancel();
+          signal.addEventListener('abort', cancelRender, { once: true });
+          if (signal.aborted) {
+            cancelRender();
+          }
+          try {
+            await renderTask.promise;
+          } finally {
+            signal.removeEventListener('abort', cancelRender);
+          }
+        } finally {
+          page.cleanup();
         }
-      } finally {
-        page?.cleanup();
+      },
+    });
+    void renderHandle.promise.catch(() => {
+      if (!cancelled) {
+        setRenderErrorPage(pageNumber);
       }
-    }
+    });
 
-    void renderPage();
     return () => {
       cancelled = true;
-      renderTask?.cancel();
+      renderHandle.cancel();
     };
   }, [
     document,
     effectiveZoom,
     onPageInfo,
     pageNumber,
+    renderQueue,
     viewportSize.height,
     viewportSize.width,
   ]);
@@ -286,22 +320,39 @@ export function PageViewer({
         role="region"
         aria-label={es.viewer.pageCanvas}
         aria-describedby="viewer-keyboard-help"
+        aria-busy={
+          !renderError &&
+          (renderStatus === 'queued' || renderStatus === 'running')
+        }
         tabIndex={0}
         onKeyDown={handleViewerKeyDown}
       >
         <span id="viewer-keyboard-help" className="visually-hidden">
           {es.viewer.keyboardHelp}
         </span>
+        {(renderStatus === 'queued' || renderStatus === 'running') &&
+          !renderError && (
+            <span className="viewer-render-status" role="status">
+              {renderStatus === 'queued' ? (
+                es.viewer.renderQueued
+              ) : (
+                <>
+                  {es.viewer.rendering}
+                  <progress aria-label={es.viewer.renderProgress} />
+                </>
+              )}
+            </span>
+          )}
+        {renderError && (
+          <span className="viewer-render-status" role="alert">
+            {es.viewer.renderError}
+          </span>
+        )}
         <div className="viewer-canvas-content">
           <canvas
             aria-label={`${es.viewer.pageCanvas}, ${es.viewer.pageNumber} ${formatNumber(pageNumber)} ${es.viewer.of} ${formatNumber(pageCount)}`}
             role="img"
           />
-          {renderError && (
-            <p className="viewer-render-error" role="alert">
-              {es.viewer.renderError}
-            </p>
-          )}
         </div>
       </div>
     </section>

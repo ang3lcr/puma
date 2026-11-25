@@ -1,6 +1,6 @@
 # Roadmap
 
-**Estado actual:** Etapas 0–3 aprobadas; Etapa 4 completada y pendiente de aprobación. Cada etapa se desarrolla en una interacción, se valida y documenta, se crea su commit/tag y luego se detiene hasta recibir aprobación. No avanzar automáticamente.
+**Estado actual:** Etapas 0–4 aprobadas; Etapa 5 completada y pendiente de aprobación. Cada etapa se desarrolla en una interacción, se valida y documenta, se crea su commit/tag y luego se detiene hasta recibir aprobación. No avanzar automáticamente.
 
 | Etapa | Alcance | Estado |
 |---|---|---|
@@ -8,8 +8,8 @@
 | 1 | Vite, React, TypeScript estricto, herramientas, i18n, CSP y layout inicial | Completada y aprobada; commit `6828f3b` |
 | 2 | Importación y lectura PDF, referencias a fuentes, casos cifrados y metadatos | Completada y aprobada |
 | 3 | Miniaturas, virtualización, renderizado bajo demanda y caché LRU | Completada y aprobada |
-| 4 | Visor, zoom, navegación, selección, propiedades y accesibilidad | Completada; pendiente de aprobación |
-| 5 | Workers, cola priorizada, cancelación, progreso y ciclo de vida | Pendiente |
+| 4 | Visor, zoom, navegación, selección, propiedades y accesibilidad | Completada y aprobada; commit `9439264` |
+| 5 | Cola priorizada de render PDF, cancelación, progreso y ciclo de vida | Completada; pendiente de aprobación |
 | 6 | Modelo de proyecto, comandos delta y deshacer/rehacer | Pendiente |
 | 7 | Reordenar, eliminar/restaurar, duplicar, rotar y mover páginas | Pendiente |
 | 8 | Detección conservadora de páginas en blanco y revisión | Pendiente |

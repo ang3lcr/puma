@@ -1,5 +1,15 @@
 # Changelog
 
+## Etapa 5 — 2026-11-25
+
+- Añadida `PageRenderQueue`, con una tarea PDF de canvas a la vez, FIFO por prioridad, prioridad de página visible y cancelación de trabajos en espera o activos.
+- Integrada la cola con visor y miniaturas. La cancelación propaga `AbortSignal` a `RenderTask.cancel()`; se espera a que el render finalice antes de limpiar la página o reutilizar el canvas. Las páginas se liberan con `page.cleanup()`.
+- Añadidos estados accesibles de cola/renderizado, progreso indeterminado y errores visibles; no se muestran porcentajes de progreso no disponibles.
+- Añadidas pruebas de prioridad, orden, estados, cancelación, errores y destrucción de la cola.
+- Validación: typecheck y lint correctos; 5 archivos de pruebas unitarias/componentes, 15 pruebas aprobadas; build correcto; 4 E2E aprobadas, incluidas renderización real, navegación, miniaturas virtualizadas y cero tráfico externo.
+- Bundle de producción: shell JS 286.81 kB / 88.25 kB gzip; CSS 15.14 kB / 3.73 kB gzip; módulo PDF.js diferido 447.46 kB / 134.94 kB gzip; Worker local 1,271.91 kB. Las métricas nativas de memoria/rendimiento de Chrome/Edge siguen pendientes.
+- Pendiente la aprobación de Etapa 5 antes de comenzar la Etapa 6.
+
 ## Etapa 4 — 2026-11-25
 
 - Añadido visor de página única con zoom de 25–300 %, ajuste a página y renderizado local bajo demanda.
@@ -8,7 +18,6 @@
 - Limitado el canvas principal a 16,777,216 píxeles y 8,192 px por lado; se puede reducir la resolución efectiva en páginas de dimensiones extremas para mantener acotada la asignación.
 - Validación: typecheck y lint correctos; 3 archivos de pruebas unitarias, 10 pruebas aprobadas; build correcto; 4 E2E aprobadas para visor/render, zoom, validación de página, selección, navegación de 1.000 páginas y ausencia de tráfico externo.
 - Bundle de producción: shell JS 283.57 kB / 87.34 kB gzip; módulo PDF.js diferido 447.46 kB / 134.94 kB gzip; Worker local 1,271.91 kB. Métricas de memoria/rendimiento en Chrome/Edge nativos y hardware de referencia no medidas.
-- Pendiente la aprobación de Etapa 4 antes de comenzar la cola de Workers de Etapa 5.
 
 ## Etapa 3 — 2026-11-25
 

@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { es } from '../../i18n/es';
 import { formatNumber } from '../../i18n/format';
+import type { PageRenderQueue } from '../../pdf/page-render-queue';
 import { ByteLruCache } from './thumbnail-cache';
 
 const rowHeight = 220;
@@ -16,6 +17,7 @@ interface ThumbnailListProps {
   selectedPageNumber: number;
   onSelectPage: (pageNumber: number) => void;
   cache: ByteLruCache<string, ImageBitmap>;
+  renderQueue: PageRenderQueue;
 }
 
 export function ThumbnailList({
@@ -25,6 +27,7 @@ export function ThumbnailList({
   selectedPageNumber,
   onSelectPage,
   cache,
+  renderQueue,
 }: ThumbnailListProps) {
   const scrollElementRef = useRef<HTMLDivElement>(null);
   // TanStack Virtual intentionally exposes mutable virtualizer state for the rendered window.
@@ -78,6 +81,7 @@ export function ThumbnailList({
               pageNumber={virtualItem.index + 1}
               selected={virtualItem.index + 1 === selectedPageNumber}
               onSelect={onSelectPage}
+              renderQueue={renderQueue}
             />
           </li>
         ))}
@@ -93,6 +97,7 @@ interface PageThumbnailProps {
   pageNumber: number;
   selected: boolean;
   onSelect: (pageNumber: number) => void;
+  renderQueue: PageRenderQueue;
 }
 
 function PageThumbnail({
@@ -102,9 +107,13 @@ function PageThumbnail({
   pageNumber,
   selected,
   onSelect,
+  renderQueue,
 }: PageThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState(false);
+  const [renderStatus, setRenderStatus] = useState<
+    'queued' | 'running' | 'completed' | 'cancelled' | 'failed'
+  >('queued');
   const cacheKey = `${documentId}:${pageNumber}`;
 
   useEffect(() => {
@@ -115,80 +124,110 @@ function PageThumbnail({
     const targetCanvas = canvas;
 
     let cancelled = false;
-    let page: Awaited<ReturnType<PDFDocumentProxy['getPage']>> | null = null;
-    let renderTask: ReturnType<
-      Awaited<ReturnType<PDFDocumentProxy['getPage']>>['render']
-    > | null = null;
+    targetCanvas.width = 0;
+    targetCanvas.height = 0;
+    targetCanvas.style.width = '';
+    targetCanvas.style.height = '';
     setError(false);
 
     const cachedImage = cache.get(cacheKey);
     if (cachedImage) {
-      canvas.width = cachedImage.width;
-      canvas.height = cachedImage.height;
-      const context = canvas.getContext('2d', { alpha: false });
+      targetCanvas.width = cachedImage.width;
+      targetCanvas.height = cachedImage.height;
+      const context = targetCanvas.getContext('2d', { alpha: false });
       if (context) {
         context.drawImage(cachedImage, 0, 0);
+        queueMicrotask(() => {
+          if (!cancelled) {
+            setRenderStatus('completed');
+          }
+        });
       } else {
         setError(true);
+        queueMicrotask(() => {
+          if (!cancelled) {
+            setRenderStatus('failed');
+          }
+        });
       }
 
       return;
     }
 
-    async function renderThumbnail(): Promise<void> {
-      try {
-        page = await document.getPage(pageNumber);
-        if (cancelled) {
-          return;
-        }
-
-        const baseViewport = page.getViewport({ scale: 1 });
-        const scale = Math.min(
-          maxThumbnailWidth / baseViewport.width,
-          maxThumbnailHeight / baseViewport.height,
-          1,
-        );
-        const viewport = page.getViewport({ scale });
-        targetCanvas.width = Math.max(1, Math.ceil(viewport.width));
-        targetCanvas.height = Math.max(1, Math.ceil(viewport.height));
-
-        const context = targetCanvas.getContext('2d', { alpha: false });
-        if (!context) {
-          throw new Error('Canvas 2D context is unavailable.');
-        }
-
-        renderTask = page.render({
-          canvas: targetCanvas,
-          canvasContext: context,
-          viewport,
-        });
-        await renderTask.promise;
-        if (cancelled) {
-          return;
-        }
-
-        const bitmap = await createImageBitmap(targetCanvas);
-        if (cancelled) {
-          bitmap.close();
-          return;
-        }
-        cache.set(cacheKey, bitmap);
-      } catch {
+    const renderHandle = renderQueue.enqueue({
+      priority: 'thumbnail',
+      onStatus: (status) => {
         if (!cancelled) {
-          setError(true);
+          setRenderStatus(status);
         }
-      } finally {
-        page?.cleanup();
-      }
-    }
+      },
+      run: async (signal) => {
+        if (signal.aborted) {
+          return;
+        }
+        const page = await document.getPage(pageNumber);
+        try {
+          if (signal.aborted) {
+            return;
+          }
 
-    void renderThumbnail();
+          const baseViewport = page.getViewport({ scale: 1 });
+          const scale = Math.min(
+            maxThumbnailWidth / baseViewport.width,
+            maxThumbnailHeight / baseViewport.height,
+            1,
+          );
+          const viewport = page.getViewport({ scale });
+          targetCanvas.width = Math.max(1, Math.ceil(viewport.width));
+          targetCanvas.height = Math.max(1, Math.ceil(viewport.height));
+
+          const context = targetCanvas.getContext('2d', { alpha: false });
+          if (!context) {
+            throw new Error('Canvas 2D context is unavailable.');
+          }
+
+          const renderTask = page.render({
+            canvas: targetCanvas,
+            canvasContext: context,
+            viewport,
+          });
+          const cancelRender = (): void => renderTask.cancel();
+          signal.addEventListener('abort', cancelRender, { once: true });
+          if (signal.aborted) {
+            cancelRender();
+          }
+          try {
+            await renderTask.promise;
+          } finally {
+            signal.removeEventListener('abort', cancelRender);
+          }
+          if (signal.aborted) {
+            return;
+          }
+
+          const bitmap = await createImageBitmap(targetCanvas);
+          if (signal.aborted) {
+            bitmap.close();
+            return;
+          }
+          cache.set(cacheKey, bitmap);
+        } finally {
+          page.cleanup();
+        }
+      },
+    });
+
+    void renderHandle.promise.catch(() => {
+      if (!cancelled) {
+        setError(true);
+      }
+    });
 
     return () => {
       cancelled = true;
-      renderTask?.cancel();
+      renderHandle.cancel();
     };
-  }, [cache, cacheKey, document, pageNumber]);
+  }, [cache, cacheKey, document, pageNumber, renderQueue]);
 
   return (
     <figure className="thumbnail-card">
@@ -210,6 +249,14 @@ function PageThumbnail({
               {es.documents.thumbnailError}
             </span>
           )}
+          {!error &&
+            (renderStatus === 'queued' || renderStatus === 'running') && (
+              <span className="thumbnail-progress" aria-hidden="true">
+                {renderStatus === 'queued'
+                  ? es.viewer.renderQueued
+                  : es.viewer.rendering}
+              </span>
+            )}
         </span>
       </button>
       <figcaption>

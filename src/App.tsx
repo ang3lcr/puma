@@ -16,6 +16,7 @@ import type { PageInfo } from './features/pages/PageViewer';
 import { ByteLruCache } from './features/pages/thumbnail-cache';
 import { es } from './i18n/es';
 import { formatBytes, formatNumber } from './i18n/format';
+import { PageRenderQueue } from './pdf/page-render-queue';
 
 type Theme = 'dark' | 'light';
 type DocumentRecord = Omit<ImportedPdf, 'session'>;
@@ -73,6 +74,8 @@ function App() {
         (bitmap) => bitmap.close(),
       ),
   );
+  const [renderQueue] = useState(() => new PageRenderQueue());
+  const renderQueueLifecycle = useRef({ active: false });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const passwordDialogRef = useRef<HTMLDivElement>(null);
@@ -140,6 +143,20 @@ function App() {
   useEffect(() => {
     return () => thumbnailCache.clear();
   }, [thumbnailCache]);
+
+  useEffect(() => {
+    const lifecycle = renderQueueLifecycle.current;
+    lifecycle.active = true;
+    return () => {
+      lifecycle.active = false;
+      // StrictMode replays effect cleanup/setup; defer disposal until that replay settles.
+      queueMicrotask(() => {
+        if (!lifecycle.active) {
+          renderQueue.dispose();
+        }
+      });
+    };
+  }, [renderQueue]);
 
   function requestDocumentPassword(
     fileName: string,
@@ -519,6 +536,7 @@ function App() {
                 pageCount={activeDocument.pageCount}
                 selectedPageNumber={activePageNumber}
                 onSelectPage={setActivePageNumber}
+                renderQueue={renderQueue}
               />
             ) : (
               <p className="thumbnail-empty">
@@ -600,6 +618,7 @@ function App() {
                 onPageInfo={updatePageInfo}
                 onImport={() => fileInputRef.current?.click()}
                 importDisabled={isLoadingDocument}
+                renderQueue={renderQueue}
               />
             ) : (
               <div className="empty-document">

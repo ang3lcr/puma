@@ -1,6 +1,6 @@
 # Estrategia de pruebas y criterios propuestos
 
-**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–4 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
+**Estado:** criterios de rendimiento aprobados en Etapa 0; validaciones de las Etapas 1–5 ejecutadas. Medición en el hardware Chrome/Edge de referencia aún pendiente.
 
 ## Entorno de referencia
 
@@ -92,3 +92,17 @@ Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 
 | `npm run test:e2e` | 4 E2E aprobadas: CSP/shell, importación local y reapertura, visor/zoom/validación, selección y navegación con 1.000 páginas, contraseña/cancelación |
 
 La suite comprueba render real del canvas, zoom, error de número de página, navegación por teclado, selección desde miniaturas, dimensiones/rotación y ausencia de solicitudes externas. También verifica que la página cabe en el viewport del visor al cambiar a móvil y que no hay desbordamiento horizontal del documento. La inspección visual en el navegador integrado confirma el ajuste y la presentación; no sustituye pruebas de memoria/rendimiento en Chrome/Edge nativos ni verifica las métricas de producción.
+
+## Validación de Etapa 5
+
+Ejecución en Windows con Node 24.19.0, npm 11.17.0, PDF.js 6.5.438, Playwright 1.65.1 y Chromium 159.0.8154.6:
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | Correcto, sin errores TypeScript |
+| `npm run lint` | Correcto, sin infracciones |
+| `npm run test` | 5 archivos, 15 pruebas aprobadas; incluye prioridad, FIFO, estados, cancelación, fallos, `dispose()` de la cola, progreso accesible y recuperación de error del visor |
+| `npm run build` | Correcto; shell JS 286.81 kB / 88.25 kB gzip, CSS 15.14 kB / 3.73 kB gzip, módulo PDF.js diferido 447.46 kB / 134.94 kB gzip y Worker local 1,271.91 kB |
+| `npm run test:e2e` | 4 E2E aprobadas: CSP/shell, importación local/reapertura, visor/zoom/navegación, virtualización de 1.000 páginas y contraseña/cancelación |
+
+Las E2E confirman que el visor y las miniaturas conectados a la cola completan renders reales y mantienen la navegación/virtualización. Las pruebas unitarias verifican prioridad de página visible sobre miniaturas en espera, cancelación y liberación al destruir la cola. Esta suite no mide latencia, memoria máxima ni cancelación bajo estrés; las pruebas nativas en Chrome/Edge y el hardware de referencia siguen pendientes.
