@@ -1,3 +1,4 @@
+import logo from "../public/logo.png";
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { DragEvent, FormEvent, KeyboardEvent } from 'react';
 import {
@@ -1264,9 +1265,9 @@ function App() {
 
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            D
-          </span>
+    
+              <img src={logo} alt="Logo" className="logo-finanzas" />
+     
           <span className="brand-name">{es.app.name}</span>
           <span className="session-badge">{es.app.localSession}</span>
         </div>

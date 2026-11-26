@@ -1,6 +1,6 @@
 export const es = {
   app: {
-    name: 'Document Studio',
+    name: 'PUMA',
     localSession: 'Sesión local',
   },
   accessibility: {
