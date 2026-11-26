@@ -17,6 +17,9 @@ const maxThumbnailHeight = 170;
 interface ThumbnailListProps {
   documentId: string;
   document: PDFDocumentProxy;
+  sourceDocuments?: ReadonlyMap<string, PDFDocumentProxy>;
+  sourceColorIndices?: ReadonlyMap<string, number>;
+  selectedDocumentId?: string | null;
   pages: readonly ProjectPage[];
   selectedPageId: string | null;
   onSelectPage: (pageId: string) => void;
@@ -28,13 +31,16 @@ interface ThumbnailListProps {
   renderQueue: PageRenderQueue;
   blankReview?: boolean;
   selectedBlankPageIds?: ReadonlySet<string>;
-  onToggleBlankPage?: (pageId: string) => void;
-  onDeleteBlankPage?: (pageId: string) => void;
+  onToggleBlankPage?: ((pageId: string) => void) | undefined;
+  onDeleteBlankPage?: ((pageId: string) => void) | undefined;
 }
 
 export function ThumbnailList({
   documentId,
   document,
+  sourceDocuments,
+  sourceColorIndices,
+  selectedDocumentId,
   pages,
   selectedPageId,
   onSelectPage,
@@ -105,6 +111,9 @@ export function ThumbnailList({
       >
         {virtualizer.getVirtualItems().map((virtualItem) => {
           const page = getPageAt(virtualItem.index);
+          const documentColorIndex = sourceColorIndices?.get(page.documentId);
+          const sourceDocument = sourceDocuments?.get(page.documentId);
+          const sourceIsSelected = page.documentId === selectedDocumentId;
           if (page.isDeleted) {
             return (
               <li
@@ -122,6 +131,8 @@ export function ThumbnailList({
                   projectPosition={virtualItem.index + 1}
                   disabled={pageActionsDisabled}
                   onRestore={onRestorePage}
+                  sourceIsSelected={sourceIsSelected}
+                  documentColorIndex={documentColorIndex}
                 />
               </li>
             );
@@ -129,6 +140,39 @@ export function ThumbnailList({
           const displayPageNumber = activePageNumbers.get(page.id);
           if (displayPageNumber === undefined) {
             throw new Error(`Active thumbnail "${page.id}" has no page number.`);
+          }
+          if (sourceDocuments && !sourceDocument) {
+            return (
+              <li
+                key={virtualItem.key}
+                className="thumbnail-virtual-row"
+                aria-posinset={virtualItem.index + 1}
+                aria-setsize={pages.length}
+                data-document-color={documentColorIndex}
+                data-document-selected={sourceIsSelected || undefined}
+                style={{
+                  height: `${virtualItem.size}px`,
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                <figure
+                  className={`thumbnail-card thumbnail-source-pending${sourceIsSelected ? ' is-source-selected' : ''}`}
+                  data-document-color={documentColorIndex}
+                >
+                  <button
+                    className="thumbnail-select"
+                    type="button"
+                    onClick={() => onSelectPage(page.id)}
+                  >
+                    {es.documents.reopenForThumbnail}
+                  </button>
+                  <figcaption>
+                    {es.documents.pageLabel}{' '}
+                    {formatNumber(page.sourcePageNumber)}
+                  </figcaption>
+                </figure>
+              </li>
+            );
           }
           return (
             <li
@@ -143,8 +187,8 @@ export function ThumbnailList({
             >
               <PageThumbnail
                 cache={cache}
-                document={document}
-                documentId={documentId}
+                document={sourceDocument ?? document}
+                documentId={page.documentId || documentId}
                 page={page}
                 displayPageNumber={displayPageNumber}
                 analysisLabel={getBlankPageStatusLabel(
@@ -159,6 +203,8 @@ export function ThumbnailList({
                 orientationSelectionDisabled={pageActionsDisabled}
                 onToggleOrientationPage={onToggleOrientationPage}
                 selected={page.id === selectedPageId}
+                sourceIsSelected={sourceIsSelected}
+                documentColorIndex={documentColorIndex}
                 onSelect={onSelectPage}
                 renderQueue={renderQueue}
                 blankReview={blankReview}
@@ -179,6 +225,8 @@ interface DeletedPageThumbnailProps {
   projectPosition: number;
   disabled: boolean;
   onRestore: (pageId: string) => void;
+  sourceIsSelected: boolean;
+  documentColorIndex: number | undefined;
 }
 
 function DeletedPageThumbnail({
@@ -186,9 +234,14 @@ function DeletedPageThumbnail({
   projectPosition,
   disabled,
   onRestore,
+  sourceIsSelected,
+  documentColorIndex,
 }: DeletedPageThumbnailProps) {
   return (
-    <figure className="thumbnail-card thumbnail-card-deleted">
+    <figure
+      className={`thumbnail-card thumbnail-card-deleted${sourceIsSelected ? ' is-source-selected' : ''}`}
+      data-document-color={documentColorIndex}
+    >
       <div className="thumbnail-deleted-image" aria-hidden="true">
         {es.pages.deleted}
       </div>
@@ -222,12 +275,14 @@ interface PageThumbnailProps {
   orientationSelectionDisabled: boolean;
   onToggleOrientationPage: (pageId: string) => void;
   selected: boolean;
+  sourceIsSelected: boolean;
+  documentColorIndex: number | undefined;
   onSelect: (pageId: string) => void;
   renderQueue: PageRenderQueue;
   blankReview: boolean;
   blankSelected: boolean;
-  onToggleBlankPage?: (pageId: string) => void;
-  onDeleteBlankPage?: (pageId: string) => void;
+  onToggleBlankPage?: ((pageId: string) => void) | undefined;
+  onDeleteBlankPage?: ((pageId: string) => void) | undefined;
 }
 
 function PageThumbnail({
@@ -242,6 +297,8 @@ function PageThumbnail({
   orientationSelectionDisabled,
   onToggleOrientationPage,
   selected,
+  sourceIsSelected,
+  documentColorIndex,
   onSelect,
   renderQueue,
   blankReview,
@@ -380,7 +437,10 @@ function PageThumbnail({
   ]);
 
   return (
-    <figure className="thumbnail-card">
+    <figure
+      className={`thumbnail-card${sourceIsSelected ? ' is-source-selected' : ''}`}
+      data-document-color={documentColorIndex}
+    >
       <button
         className={`thumbnail-select${selected ? ' is-selected' : ''}`}
         type="button"

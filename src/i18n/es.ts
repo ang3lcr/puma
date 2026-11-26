@@ -146,6 +146,8 @@ export const es = {
     countLabel: 'documentos',
     emptyState: 'Aún no hay documentos',
     importButton: 'Seleccionar PDF',
+    addAnotherPdf: 'Agregar otro PDF',
+    reopenForThumbnail: 'Abre el archivo para ver esta miniatura.',
     importDescription: 'o arrastra archivos PDF aquí',
     sourceNote: 'Los originales permanecen en este dispositivo.',
     importing: 'Leyendo documento',

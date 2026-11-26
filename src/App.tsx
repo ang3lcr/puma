@@ -76,11 +76,6 @@ interface FullReadRequest {
   resolve: (confirmed: boolean) => void;
 }
 
-interface ActivePdfSession {
-  documentId: string;
-  session: PdfDocumentSession;
-}
-
 interface BlankScanState {
   documentId: string;
   status: 'running' | 'completed' | 'cancelled' | 'failed';
@@ -123,6 +118,9 @@ function App() {
     createProjectHistoryState,
   );
   const documents = getOrderedProjectDocuments(projectHistory.project);
+  const documentColorIndices = new Map(
+    documents.map((document, index) => [document.id, index % 4]),
+  );
   const projectPages = getOrderedProjectPages(projectHistory.project);
   const activeProjectPages = projectPages.filter((page) => !page.isDeleted);
   const exportEstimate = estimatePdfExportMemory(documents, activeProjectPages);
@@ -171,8 +169,9 @@ function App() {
     useState<ReadonlySet<string>>(() => new Set());
   const [isImporting, setIsImporting] = useState(false);
   const [isOpeningDocument, setIsOpeningDocument] = useState(false);
-  const [activePdfSession, setActivePdfSession] =
-    useState<ActivePdfSession | null>(null);
+  const [pdfSessions, setPdfSessions] = useState<
+    ReadonlyMap<string, PdfDocumentSession>
+  >(() => new Map());
   const [progress, setProgress] = useState<ImportProgressState | null>(null);
   const [importFailures, setImportFailures] = useState<ImportFailure[]>([]);
   const [passwordRequest, setPasswordRequest] =
@@ -195,9 +194,21 @@ function App() {
   const passwordDialogRef = useRef<HTMLDivElement>(null);
   const fullReadDialogRef = useRef<HTMLDivElement>(null);
   const importRunning = useRef(false);
+  const pdfSessionsRef = useRef<ReadonlyMap<string, PdfDocumentSession>>(
+    new Map(),
+  );
   const dispatchProject = useCallback((action: ProjectHistoryAction): void => {
     dispatchProjectAction(action);
   }, []);
+  function rememberPdfSession(
+    documentId: string,
+    session: PdfDocumentSession,
+  ): void {
+    const nextSessions = new Map(pdfSessionsRef.current);
+    nextSessions.set(documentId, session);
+    pdfSessionsRef.current = nextSessions;
+    setPdfSessions(nextSessions);
+  }
   const blankScanAbort = useRef<AbortController | null>(null);
   const orientationScanAbort = useRef<AbortController | null>(null);
   const pdfExportAbort = useRef<AbortController | null>(null);
@@ -233,10 +244,15 @@ function App() {
   const sequencePageNumber =
     activeProjectPages.findIndex((page) => page.id === currentProjectPage?.id) +
     1;
-  const activeSession =
-    activePdfSession?.documentId === activeDocumentId
-      ? activePdfSession.session
-      : null;
+  const activeSession = activeDocumentId
+    ? (pdfSessions.get(activeDocumentId) ?? null)
+    : null;
+  const thumbnailDocuments = new Map(
+    [...pdfSessions].map(([documentId, session]) => [
+      documentId,
+      session.document,
+    ]),
+  );
   const isBlankScanRunning =
     blankScan?.documentId === activeDocumentId && blankScan.status === 'running';
   const isOrientationScanRunning =
@@ -244,7 +260,7 @@ function App() {
     orientationScan.status === 'running';
   const isPageAnalysisRunning =
     isBlankScanRunning || isOrientationScanRunning;
-  const selectedOrientationPages = activeDocumentPages.filter((page) =>
+  const selectedOrientationPages = projectPages.filter((page) =>
     selectedOrientationPageIds.has(page.id),
   );
   const pendingOrientationSuggestions = activeDocumentPages.filter(
@@ -290,7 +306,6 @@ function App() {
       setActiveDocumentId(null);
       setActivePageId(null);
       setActivePageInfo(null);
-      setActivePdfSession(null);
       setSelectedOrientationPageIds(new Set());
       setSelectedBlankPageIds(new Set());
     }
@@ -521,11 +536,13 @@ function App() {
   }
 
   function restorePage(pageId: string): void {
+    const page = projectHistory.project.pages.get(pageId);
+    if (!page) return;
     dispatchProject({
       type: 'execute',
       command: createRestorePageCommand(projectHistory.project, pageId),
     });
-    setActivePageId(pageId);
+    selectThumbnailPage(pageId);
   }
 
   async function runBlankScan(): Promise<void> {
@@ -861,18 +878,32 @@ function App() {
   }, [fullReadRequest]);
 
   useEffect(() => {
-    if (!activePdfSession) {
-      return;
-    }
+    const documentIds = new Set(projectHistory.project.documents.keys());
+    const removedSessions = [...pdfSessions].filter(
+      ([documentId]) => !documentIds.has(documentId),
+    );
+    if (removedSessions.length === 0) return;
 
+    const nextSessions = new Map(pdfSessions);
+    for (const [documentId] of removedSessions) nextSessions.delete(documentId);
+    pdfSessionsRef.current = nextSessions;
+    setPdfSessions(nextSessions);
+    for (const [, session] of removedSessions) {
+      void session.loadingTask.destroy().catch((error: unknown) => {
+        console.error('Unable to release a removed PDF document.', error);
+      });
+    }
+  }, [pdfSessions, projectHistory.project.documents]);
+
+  useEffect(() => {
     return () => {
-      void activePdfSession.session.loadingTask
-        .destroy()
-        .catch((error: unknown) => {
-          console.error('Unable to release the active PDF document.', error);
+      for (const session of pdfSessionsRef.current.values()) {
+        void session.loadingTask.destroy().catch((error: unknown) => {
+          console.error('Unable to release a PDF document.', error);
         });
+      }
     };
-  }, [activePdfSession]);
+  }, []);
 
   useEffect(() => {
     return () => thumbnailCache.clear();
@@ -966,7 +997,7 @@ function App() {
             : null,
         );
         setActivePageInfo(null);
-        setActivePdfSession({ documentId: documentRecord.id, session });
+        rememberPdfSession(documentRecord.id, session);
       } catch (error) {
         failures.push({
           fileName,
@@ -986,7 +1017,7 @@ function App() {
       isLoadingDocument ||
       isPageAnalysisRunning ||
       importRunning.current ||
-      activePdfSession?.documentId === document.id
+      (activeDocumentId === document.id && activeSession !== null)
     ) {
       return;
     }
@@ -1000,49 +1031,52 @@ function App() {
       return;
     }
 
-    setIsOpeningDocument(true);
-    setImportFailures([]);
-    setProgress({
-      fileName: document.fileName,
-      loaded: 0,
-      total: document.size,
-      percent: 0,
-    });
-
-    try {
-      const { openPdfDocument } = await import(
-        './features/documents/pdf-import'
-      );
-      const session = await openPdfDocument(document.file, {
-        requestPassword: (reason) =>
-          requestDocumentPassword(document.fileName, reason),
-        confirmFullRead: (fileSize) =>
-          requestFullReadConfirmation(document.fileName, fileSize),
-        onProgress: (nextProgress) => {
-          setProgress({ fileName: document.fileName, ...nextProgress });
-        },
+    let session = pdfSessions.get(document.id);
+    if (!session) {
+      setIsOpeningDocument(true);
+      setImportFailures([]);
+      setProgress({
+        fileName: document.fileName,
+        loaded: 0,
+        total: document.size,
+        percent: 0,
       });
-
-      setSelectedOrientationPageIds(new Set());
-      setSelectedBlankPageIds(new Set());
-      setActiveDocumentId(document.id);
-      const firstPage = getOrderedProjectPages(projectHistory.project).find(
-        (page) => page.documentId === document.id && !page.isDeleted,
-      );
-      setActivePageId(firstPage?.id ?? null);
-      setActivePageInfo(null);
-      setActivePdfSession({ documentId: document.id, session });
-    } catch (error) {
-      setImportFailures([
-        {
-          fileName: document.fileName,
-          message: getImportFailureMessage(error),
-        },
-      ]);
-    } finally {
+      try {
+        const { openPdfDocument } = await import(
+          './features/documents/pdf-import'
+        );
+        session = await openPdfDocument(document.file, {
+          requestPassword: (reason) =>
+            requestDocumentPassword(document.fileName, reason),
+          confirmFullRead: (fileSize) =>
+            requestFullReadConfirmation(document.fileName, fileSize),
+          onProgress: (nextProgress) => {
+            setProgress({ fileName: document.fileName, ...nextProgress });
+          },
+        });
+        rememberPdfSession(document.id, session);
+      } catch (error) {
+        setImportFailures([
+          {
+            fileName: document.fileName,
+            message: getImportFailureMessage(error),
+          },
+        ]);
+        setIsOpeningDocument(false);
+        setProgress(null);
+        return;
+      }
       setIsOpeningDocument(false);
       setProgress(null);
     }
+
+    setSelectedBlankPageIds(new Set());
+    setActiveDocumentId(document.id);
+    const firstPage = getOrderedProjectPages(projectHistory.project).find(
+      (page) => page.documentId === document.id && !page.isDeleted,
+    );
+    setActivePageId(firstPage?.id ?? null);
+    setActivePageInfo(null);
   }
 
   function handleFileInputChange(
@@ -1052,6 +1086,25 @@ function App() {
     const files = Array.from(input.files ?? []);
     input.value = '';
     void importFiles(files);
+  }
+
+  function selectThumbnailPage(pageId: string): void {
+    const page = projectHistory.project.pages.get(pageId);
+    const document = page
+      ? documents.find((source) => source.id === page.documentId)
+      : undefined;
+    if (!page || !document) return;
+
+    if (activeDocumentId === document.id && activeSession) {
+      setActivePageId(pageId);
+      return;
+    }
+
+    void selectDocument(document).then(() => {
+      if (pdfSessionsRef.current.has(document.id)) {
+        setActivePageId(pageId);
+      }
+    });
   }
 
   function handleDrop(event: DragEvent<HTMLElement>): void {
@@ -1219,6 +1272,19 @@ function App() {
         </div>
 
         <div className="topbar-actions">
+          {documents.length > 0 && (
+            <button
+              className="add-pdf-button"
+              type="button"
+              aria-label={es.documents.addAnotherPdf}
+              title={es.documents.addAnotherPdf}
+              disabled={isLoadingDocument || isPageAnalysisRunning}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <span aria-hidden="true">+</span>
+              <span>{es.documents.addAnotherPdf}</span>
+            </button>
+          )}
           <div
             className="history-controls"
             role="group"
@@ -1303,6 +1369,7 @@ function App() {
                       className="document-list-item"
                       type="button"
                       aria-pressed={document.id === activeDocumentId}
+                      data-document-color={documentColorIndices.get(document.id)}
                       disabled={
                         isLoadingDocument ||
                         isPageAnalysisRunning ||
@@ -1310,6 +1377,10 @@ function App() {
                       }
                       onClick={() => void selectDocument(document)}
                     >
+                      <span
+                        className="document-color-swatch"
+                        aria-hidden="true"
+                      />
                       <span className="document-list-name">
                         {document.fileName}
                       </span>
@@ -1488,15 +1559,21 @@ function App() {
                 )}
               </div>
             )}
-            {activeDocument && activeSession ? (
+            {projectPages.length > 0 && thumbnailDocuments.size > 0 ? (
               <ThumbnailList
-                key={activeDocument.id}
+                key="combined-project-thumbnails"
                 cache={thumbnailCache}
-                document={activeSession.document}
-                documentId={activeDocument.id}
-                pages={documentPages}
+                document={
+                  activeSession?.document ??
+                  [...thumbnailDocuments.values()][0]!
+                }
+                documentId={activeDocument?.id ?? [...thumbnailDocuments.keys()][0]!}
+                sourceDocuments={thumbnailDocuments}
+                sourceColorIndices={documentColorIndices}
+                selectedDocumentId={activeDocumentId}
+                pages={projectPages}
                 selectedPageId={selectedPageId}
-                onSelectPage={setActivePageId}
+                onSelectPage={selectThumbnailPage}
                 onRestorePage={restorePage}
                 selectedOrientationPageIds={selectedOrientationPageIds}
                 onToggleOrientationPage={toggleOrientationPageSelection}
