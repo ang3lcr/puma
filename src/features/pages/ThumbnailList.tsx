@@ -26,6 +26,10 @@ interface ThumbnailListProps {
   pageActionsDisabled: boolean;
   cache: ByteLruCache<string, ImageBitmap>;
   renderQueue: PageRenderQueue;
+  blankReview?: boolean;
+  selectedBlankPageIds?: ReadonlySet<string>;
+  onToggleBlankPage?: (pageId: string) => void;
+  onDeleteBlankPage?: (pageId: string) => void;
 }
 
 export function ThumbnailList({
@@ -40,6 +44,10 @@ export function ThumbnailList({
   pageActionsDisabled,
   cache,
   renderQueue,
+  blankReview = false,
+  selectedBlankPageIds = new Set(),
+  onToggleBlankPage,
+  onDeleteBlankPage,
 }: ThumbnailListProps) {
   const scrollElementRef = useRef<HTMLDivElement>(null);
   const activePageNumbers = new Map<string, number>();
@@ -75,7 +83,11 @@ export function ThumbnailList({
   }, [pages.length, selectedIndex, virtualizer]);
 
   if (pages.length === 0) {
-    return <p className="thumbnail-empty">{es.documents.emptyPages}</p>;
+    return (
+      <p className="thumbnail-empty">
+        {blankReview ? es.blankDetection.blankPagesEmpty : es.documents.emptyPages}
+      </p>
+    );
   }
 
   return (
@@ -83,12 +95,12 @@ export function ThumbnailList({
       ref={scrollElementRef}
       className="thumbnail-scroll"
       role="region"
-      aria-label={es.documents.pagesHeading}
+      aria-label={blankReview ? es.blankDetection.blankPagesHeading : es.documents.pagesHeading}
       tabIndex={0}
     >
       <ol
         className="thumbnail-virtual-list"
-        aria-label={es.documents.pagesHeading}
+        aria-label={blankReview ? es.blankDetection.blankPagesHeading : es.documents.pagesHeading}
         style={{ height: `${virtualizer.getTotalSize()}px` }}
       >
         {virtualizer.getVirtualItems().map((virtualItem) => {
@@ -149,6 +161,10 @@ export function ThumbnailList({
                 selected={page.id === selectedPageId}
                 onSelect={onSelectPage}
                 renderQueue={renderQueue}
+                blankReview={blankReview}
+                blankSelected={selectedBlankPageIds.has(page.id)}
+                onToggleBlankPage={onToggleBlankPage}
+                onDeleteBlankPage={onDeleteBlankPage}
               />
             </li>
           );
@@ -208,6 +224,10 @@ interface PageThumbnailProps {
   selected: boolean;
   onSelect: (pageId: string) => void;
   renderQueue: PageRenderQueue;
+  blankReview: boolean;
+  blankSelected: boolean;
+  onToggleBlankPage?: (pageId: string) => void;
+  onDeleteBlankPage?: (pageId: string) => void;
 }
 
 function PageThumbnail({
@@ -224,6 +244,10 @@ function PageThumbnail({
   selected,
   onSelect,
   renderQueue,
+  blankReview,
+  blankSelected,
+  onToggleBlankPage,
+  onDeleteBlankPage,
 }: PageThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState(false);
@@ -360,14 +384,14 @@ function PageThumbnail({
       <button
         className={`thumbnail-select${selected ? ' is-selected' : ''}`}
         type="button"
-        aria-label={`${es.viewer.selectPage} ${formatNumber(displayPageNumber)}`}
+        aria-label={`${es.viewer.selectPage} ${formatNumber(blankReview ? page.sourcePageNumber : displayPageNumber)}`}
         aria-pressed={selected}
         onClick={() => onSelect(page.id)}
       >
         <span className="thumbnail-image">
           <canvas
             ref={canvasRef}
-            aria-label={`${es.documents.pageLabel} ${formatNumber(displayPageNumber)}`}
+            aria-label={`${es.documents.pageLabel} ${formatNumber(blankReview ? page.sourcePageNumber : displayPageNumber)}`}
             className={error ? 'thumbnail-canvas has-error' : 'thumbnail-canvas'}
           />
           {error && (
@@ -387,18 +411,45 @@ function PageThumbnail({
       </button>
       <figcaption>
         <span>
-          {es.documents.pageLabel} {formatNumber(displayPageNumber)}
+          {es.documents.pageLabel}{' '}
+          {formatNumber(blankReview ? page.sourcePageNumber : displayPageNumber)}
         </span>
-        <label className="thumbnail-orientation-select">
-          <input
-            type="checkbox"
-            aria-label={`${es.orientation.selectForBatch} ${formatNumber(displayPageNumber)}`}
-            checked={orientationSelected}
-            disabled={orientationSelectionDisabled}
-            onChange={() => onToggleOrientationPage(page.id)}
-          />
-        </label>
+        {blankReview ? (
+          <label className="thumbnail-blank-select">
+            <input
+              type="checkbox"
+              aria-label={`${es.blankDetection.selectBlankPage} ${formatNumber(page.sourcePageNumber)}`}
+              checked={blankSelected}
+              disabled={orientationSelectionDisabled}
+              onChange={() => onToggleBlankPage?.(page.id)}
+            />
+          </label>
+        ) : (
+          <label className="thumbnail-orientation-select">
+            <input
+              type="checkbox"
+              aria-label={`${es.orientation.selectForBatch} ${formatNumber(displayPageNumber)}`}
+              checked={orientationSelected}
+              disabled={orientationSelectionDisabled}
+              onChange={() => onToggleOrientationPage(page.id)}
+            />
+          </label>
+        )}
       </figcaption>
+      {blankReview && (
+        <button
+          className="blank-page-delete"
+          type="button"
+          aria-label={es.blankDetection.deleteBlankPage.replace(
+            '{page}',
+            formatNumber(page.sourcePageNumber),
+          )}
+          disabled={orientationSelectionDisabled}
+          onClick={() => onDeleteBlankPage?.(page.id)}
+        >
+          {es.pages.delete}
+        </button>
+      )}
       {analysisLabel && (
         <span className="thumbnail-analysis-label">{analysisLabel}</span>
       )}

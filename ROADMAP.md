@@ -16,7 +16,7 @@
 | 9 | Sugerencias y corrección de orientación, manual y masiva | Completada y aprobada |
 | 10 | Editor de márgenes, CropBox y recorte físico explícito | Completada y aprobada |
 | 11 | Combinación de documentos y limitaciones de preservación | Completada y aprobada |
-| 12 | Guardado, autoguardado, recuperación, cuotas y migraciones | Completada y aprobada |
+| 12 | Guardado, autoguardado, recuperación, cuotas y migraciones | Retirada; los proyectos solo viven durante la sesión |
 | 13 | Exportación normal, estimación, validación y cancelación segura | Completada y aprobada; commit `064402b` |
 | 14 | Exportación grande, división por partes y recuperación de fallos | Completada; exportación por partes, validación individual y reintento |
 | 15 | Estrés, rendimiento, seguridad local y regresión en Chrome/Edge | Suite Chromium ejecutada; mediciones Chrome/Edge nativos y hardware pendiente |

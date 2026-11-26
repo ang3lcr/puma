@@ -9,13 +9,6 @@ vi.mock('./features/documents/pdf-import', () => ({
   importPdfFile: vi.fn(),
 }));
 
-vi.mock('./storage/project-persistence', () => ({
-  estimateLocalStorage: vi.fn().mockResolvedValue(null),
-  isStorageQuotaError: vi.fn(() => false),
-  loadSavedProject: vi.fn().mockResolvedValue(null),
-  saveProjectHistory: vi.fn().mockResolvedValue(Date.now()),
-}));
-
 describe('Document Studio initial workspace', () => {
   beforeEach(() => {
     vi.mocked(importPdfFile).mockReset();

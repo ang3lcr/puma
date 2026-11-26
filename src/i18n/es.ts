@@ -18,37 +18,6 @@ export const es = {
     undo: 'Deshacer',
     redo: 'Rehacer',
   },
-  persistence: {
-    region: 'Guardado local del proyecto',
-    recoveryRegion: 'Recuperación de fuentes del proyecto',
-    loading: 'Recuperando proyecto local…',
-    pending: 'Cambios pendientes de guardar',
-    saving: 'Guardando proyecto…',
-    saved: 'Proyecto guardado localmente',
-    errorSummary: 'Error de guardado local',
-    savedAt: 'Último guardado: {time}',
-    notSaved: 'Todavía no hay cambios guardados.',
-    saveNow: 'Guardar ahora',
-    saveFailed: 'No se pudo guardar el proyecto local.',
-    recoveryFailed:
-      'No se pudo recuperar el proyecto local. No se sobrescribió el guardado existente.',
-    quotaExceeded:
-      'Se agotó la cuota de almacenamiento. Libera espacio y vuelve a guardar.',
-    quotaWarning:
-      'El almacenamiento está casi lleno: {usage} usados de {quota}.',
-    quotaUnavailable: 'El navegador no informa la cuota de almacenamiento.',
-    quotaEstimateFailed: 'No se pudo estimar el espacio de almacenamiento.',
-    missingSources:
-      'El proyecto se recuperó, pero faltan {count} archivos PDF de origen. Vuelve a seleccionarlos para abrir las páginas.',
-    relinkButton: 'Seleccionar archivos para recuperar',
-    relinkDescription:
-      'Los archivos se verifican por nombre, tamaño, cantidad de páginas y huella PDF. Sus bytes no se copian al almacenamiento del proyecto.',
-    sourceNotFound:
-      'No se encontró una fuente pendiente con el mismo nombre y tamaño.',
-    sourceMismatch:
-      'La huella o cantidad de páginas no coincide con el proyecto guardado; no se enlazó el archivo.',
-    sourcePending: 'Fuente pendiente',
-  },
   pages: {
     actionsHeading: 'Acciones de página',
     moveUp: 'Mover página arriba en la combinación',
@@ -69,6 +38,17 @@ export const es = {
   },
   blankDetection: {
     region: 'Detección de páginas en blanco',
+    blankPagesHeading: 'Hojas en blanco encontradas',
+    blankPagesSource: 'En el documento activo',
+    blankPagesEmpty: 'Todavía no se encontraron hojas en blanco.',
+    blankPagesCount: '{count} encontradas',
+    selectAllBlankPages: 'Seleccionar todas',
+    clearBlankSelection: 'Limpiar selección',
+    selectedBlankCount: '{count} seleccionadas',
+    deleteSelectedBlankPages: 'Eliminar seleccionadas ({count})',
+    deleteBlankPage: 'Eliminar hoja en blanco {page}',
+    selectBlankPage: 'Seleccionar hoja en blanco',
+    deleteBlankPagesCommand: 'Eliminar hojas en blanco seleccionadas',
     scan: 'Analizar páginas en blanco',
     cancel: 'Cancelar análisis',
     scanning: 'Analizando páginas',
@@ -188,6 +168,7 @@ export const es = {
     noDocumentSelected: 'Selecciona un documento para ver sus propiedades.',
     thumbnailError: 'No se pudo crear esta miniatura.',
     reopening: 'Abriendo documento para generar miniaturas…',
+    fileUnavailable: 'Vuelve a importar este PDF para abrirlo.',
   },
   combination: {
     region: 'Combinación y preservación',
@@ -253,7 +234,7 @@ export const es = {
       'memory-budget':
         'Una página individual supera el presupuesto heurístico de 1.5 GiB. Reduce el proyecto o el tamaño de la fuente antes de exportar.',
       'missing-source':
-        'Faltan archivos PDF de origen. Vuelve a seleccionarlos para recuperar el proyecto.',
+        'Falta un archivo PDF de origen. Vuelve a importar el documento para exportar.',
       'no-pages': 'No hay páginas activas para exportar.',
       'validation-failed':
         'El PDF generado no superó la validación; no se descargó ningún archivo.',

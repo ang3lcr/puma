@@ -179,27 +179,6 @@ main:focus-visible {
   opacity: 0.45;
 }
 
-.save-project-button {
-  min-height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  color: var(--accent);
-  background: transparent;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.save-project-button:hover:not(:disabled) {
-  background: var(--accent-wash);
-}
-
-.save-project-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
 .local-indicator {
   gap: 8px;
   color: var(--text-muted);
@@ -242,7 +221,7 @@ main:focus-visible {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: 248px minmax(360px, 1fr) 286px;
+  grid-template-columns: 420px minmax(360px, 1fr) 286px;
 }
 
 .document-panel,
@@ -258,13 +237,12 @@ main:focus-visible {
   border-right: 1px solid var(--border);
 }
 
-.document-section,
-.thumbnail-section {
-  padding: 19px 16px;
+.document-section {
+  padding: 12px 14px 10px;
 }
 
 .document-section {
-  min-height: 220px;
+  min-height: 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -294,7 +272,7 @@ main:focus-visible {
 }
 
 .panel-caption {
-  margin: 4px 0 18px;
+  margin: 4px 0 8px;
   color: var(--text-subtle);
   font-size: 11px;
 }
@@ -320,8 +298,8 @@ main:focus-visible {
 
 .document-list {
   display: grid;
-  max-height: 260px;
-  gap: 5px;
+  max-height: 104px;
+  gap: 3px;
   margin: 0;
   padding: 0;
   overflow: auto;
@@ -331,11 +309,11 @@ main:focus-visible {
 .document-list-item {
   display: flex;
   width: 100%;
-  min-height: 48px;
+  min-height: 36px;
   align-items: flex-start;
   flex-direction: column;
-  gap: 5px;
-  padding: 8px;
+  gap: 3px;
+  padding: 5px 7px;
   border: 1px solid transparent;
   border-radius: 6px;
   color: var(--text-muted);
@@ -379,19 +357,87 @@ main:focus-visible {
   font-size: 19px;
 }
 
-.thumbnail-section {
-  display: flex;
+.thumbnail-columns {
+  display: grid;
   min-height: 0;
   flex: 1;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.thumbnail-section,
+.blank-thumbnail-section {
+  display: flex;
+  min-height: 0;
+  padding: 13px 11px;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.thumbnail-section {
+  border-right: 1px solid var(--border);
+}
+
+.blank-thumbnail-section {
+  background: color-mix(in srgb, var(--panel) 92%, var(--accent));
+}
+
+.blank-pages-source {
+  margin: 3px 0 0;
+  color: var(--text-subtle);
+  font-size: 9px;
+}
+
+.blank-pages-count {
+  margin: 4px 0 8px;
+  color: var(--text-subtle);
+  font-size: 10px;
+}
+
+.blank-page-selection-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.thumbnail-blank-select {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumbnail-blank-select input {
+  accent-color: var(--accent);
+}
+
+.blank-page-delete {
+  min-height: 24px;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--danger, #e17a7a) 55%, var(--border));
+  border-radius: 5px;
+  color: var(--danger, #e17a7a);
+  background: transparent;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.blank-page-delete:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--danger, #e17a7a);
+}
+
+.blank-page-delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .thumbnail-scroll {
   flex: 1;
   width: 100%;
-  min-height: 160px;
-  height: min(54vh, 500px);
-  max-height: calc(100vh - 340px);
+  min-height: 100px;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-color: var(--border) transparent;
@@ -856,54 +902,6 @@ main:focus-visible {
   font-size: 17px;
   font-weight: 620;
   letter-spacing: -0.02em;
-}
-
-.persistence-panel,
-.recovery-panel {
-  display: grid;
-  gap: 6px;
-  margin: -5px 0 12px;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  color: var(--text-muted);
-  background: var(--panel);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.persistence-summary {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 5px 12px;
-}
-
-.storage-usage,
-.persistence-hint {
-  color: var(--text-subtle);
-}
-
-.persistence-error {
-  margin: 0;
-  color: var(--danger, #e17a7a);
-}
-
-.persistence-warning {
-  margin: 0;
-  color: var(--warning, #d39a56);
-}
-
-.recovery-panel {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-}
-
-.recovery-panel p {
-  margin: 0;
-}
-
-.recovery-panel .secondary-button {
-  justify-self: start;
 }
 
 .document-state {
@@ -1625,7 +1623,7 @@ main:focus-visible {
 
 @media (max-width: 1100px) {
   .workbench {
-    grid-template-columns: 220px minmax(320px, 1fr) 250px;
+    grid-template-columns: 380px minmax(320px, 1fr) 250px;
   }
 
   .workspace {
@@ -1642,7 +1640,7 @@ main:focus-visible {
   }
 
   .workbench {
-    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
     grid-template-areas:
       "documents workspace"
@@ -1651,6 +1649,21 @@ main:focus-visible {
 
   .document-panel {
     grid-area: documents;
+    overflow-y: auto;
+  }
+
+  .thumbnail-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .thumbnail-section {
+    min-height: 320px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .blank-thumbnail-section {
+    min-height: 300px;
   }
 
   .workspace {
@@ -1704,19 +1717,33 @@ main:focus-visible {
   }
 
   .document-panel {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
 
-  .document-section,
-  .thumbnail-section {
-    min-height: 145px;
-    padding: 13px;
+  .document-section {
+    min-height: 0;
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
   }
 
-  .document-section {
+  .thumbnail-columns {
+    min-height: 310px;
+    flex: 0 0 310px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .thumbnail-section,
+  .blank-thumbnail-section {
+    height: 310px;
+    min-height: 0;
+    padding: 10px 8px;
+  }
+
+  .thumbnail-section {
     border-right: 1px solid var(--border);
     border-bottom: 0;
   }
@@ -1734,9 +1761,7 @@ main:focus-visible {
   }
 
   .thumbnail-scroll {
-    min-height: 120px;
-    height: 150px;
-    max-height: 150px;
+    min-height: 80px;
   }
 
   .workspace {
@@ -1751,11 +1776,6 @@ main:focus-visible {
 
   .workspace-header {
     align-items: flex-start;
-  }
-
-  .persistence-summary {
-    align-items: flex-start;
-    flex-direction: column;
   }
 
   .document-state {
